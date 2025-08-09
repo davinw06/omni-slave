@@ -9,7 +9,7 @@ const path = require('node:path');
 const mongoose = require('mongoose');
 const fetch = require('node-fetch');
 
-const mongoURI = 'mongodb://localhost:27017/your_database_name';
+const mongoURI = process.env.MONGO_URI;
 mongoose.connect(mongoURI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
