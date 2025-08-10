@@ -1,5 +1,8 @@
 // This is a standalone script, save it as a new file, e.g., 'migrate.js'
 
+// Add this line to explicitly load environment variables
+require('dotenv').config();
+
 const mongoose = require('mongoose');
 
 // Assuming your existing message schema is in 'messageSchema.js'
