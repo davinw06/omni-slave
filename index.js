@@ -206,17 +206,18 @@ client.on(Events.MessageCreate, async message => {
     // Ignore messages from bots or direct messages
     if (message.author.bot || !message.guild) return;
 
+    const userId = message.author.id;
+
     try {
-        // Create and save a new message document
-        const newMessage = new MessageModel({
-            userId: message.author.id,
-            guildId: message.guild.id,
-            channelId: message.channel.id,
-            messageId: message.id,
-        });
-        await newMessage.save();
+        // Find the user and increment their messageCount.
+        // `upsert: true` will create a new user document if one doesn't exist.
+        await User.findOneAndUpdate(
+            { userId: userId },
+            { $inc: { messageCount: 1 } },
+            { upsert: true }
+        );
     } catch (error) {
-        console.error('Error saving message to the database:', error);
+        console.error('Error updating message count:', error);
     }
 });
 
