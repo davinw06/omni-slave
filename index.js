@@ -10,6 +10,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const mongoose = require('mongoose');
 const fetch = require('node-fetch');
+const User = require('./Schemas.js/userSchema');
 
 
 const mongoURI = process.env.MONGO_URI;
