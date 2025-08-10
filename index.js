@@ -8,6 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const mongoose = require('mongoose');
 const fetch = require('node-fetch');
+const app = express();
 
 const mongoURI = process.env.MONGO_URI;
 
