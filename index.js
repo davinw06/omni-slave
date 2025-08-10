@@ -4,11 +4,13 @@ const clientId = process.env.CLIENT_ID;
 const guildId = process.env.GUILD_ID;
 const token = process.env.DISCORD_TOKEN;
 
+const express = require('express');
+const app = express();
 const fs = require('node:fs');
 const path = require('node:path');
 const mongoose = require('mongoose');
 const fetch = require('node-fetch');
-const app = express();
+
 
 const mongoURI = process.env.MONGO_URI;
 
