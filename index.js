@@ -10,6 +10,15 @@ const mongoose = require('mongoose');
 const fetch = require('node-fetch');
 
 const mongoURI = process.env.MONGO_URI;
+
+app.listen(process.env.PORT || 3000, () => {
+    console.log(`Web server is listening on port ${process.env.PORT || 3000}`);
+});
+
+app.get('/', (req, res) => {
+    res.send("The Discord bot is alive!");
+});
+
 mongoose.connect(mongoURI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
