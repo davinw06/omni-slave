@@ -2,7 +2,7 @@ const { SlashCommandBuilder, EmbedBuilder, ApplicationCommandOptionType } = requ
 const fs = require('fs');
 const path = require('path');
 
-function getAllCommands(commandsDir) {
+function getMainCommands(commandsDir) {
   const commandsList = [];
   const categories = fs.readdirSync(commandsDir, { withFileTypes: true })
     .filter(dirent => dirent.isDirectory())
@@ -30,25 +30,23 @@ module.exports = (client => {
       .addStringOption(option =>
         option
           .setName('details')
-          .setDescription('Type a command name to view its description')
+          .setDescription('Type a command name to view its details')
           .setAutocomplete(true)
       ),
 
-    // Handle the main command execution
     async execute(interaction) {
       const details = interaction.options.getString('details');
 
       if (details) {
-        // Show just that command's description
-        const allCommands = getAllCommands(commandsDir);
-        const foundCommand = allCommands.find(c => c.name.toLowerCase() === details.toLowerCase());
+        const mainCommands = getMainCommands(commandsDir);
+        const found = mainCommands.find(c => c.name.toLowerCase() === details.toLowerCase());
 
-        if (!foundCommand) {
+        if (!found) {
           await interaction.reply({ content: `Command \`${details}\` not found.`, ephemeral: true });
           return;
         }
 
-        const commandPath = path.join(commandsDir, foundCommand.category, `${foundCommand.name}.js`);
+        const commandPath = path.join(commandsDir, found.category, `${found.name}.js`);
         delete require.cache[require.resolve(commandPath)];
         const commandModule = require(commandPath);
 
@@ -56,19 +54,38 @@ module.exports = (client => {
           ? (typeof commandModule.data.toJSON === 'function' ? commandModule.data.toJSON() : commandModule.data)
           : null;
 
-        const description = dataRaw?.description || 'No description provided.';
+        const mainDescription = dataRaw?.description || 'No description provided.';
+        const options = Array.isArray(dataRaw?.options) ? dataRaw.options : [];
+
+        const lines = [`**/${found.name}** — ${mainDescription}`];
+
+        // Top-level subcommands
+        const subcommands = options.filter(opt => opt.type === ApplicationCommandOptionType.Subcommand);
+        for (const sub of subcommands) {
+          lines.push(`• /${found.name} ${sub.name} — ${sub.description || 'No description provided.'}`);
+        }
+
+        // Subcommand groups
+        const groups = options.filter(opt => opt.type === ApplicationCommandOptionType.SubcommandGroup);
+        for (const group of groups) {
+          lines.push(`**${group.name}** — ${group.description || 'No description provided.'}`);
+          for (const sub of (group.options || [])) {
+            lines.push(`    • /${found.name} ${group.name} ${sub.name} — ${sub.description || 'No description provided.'}`);
+          }
+        }
+
         await interaction.reply({
           embeds: [
             new EmbedBuilder()
               .setColor('#00ff99')
-              .setTitle(`/${foundCommand.name}`)
-              .setDescription(description)
+              .setTitle(`Command Details: /${found.name}`)
+              .setDescription(lines.join('\n'))
           ]
         });
         return;
       }
 
-      // Otherwise, show full list
+      // Default: list all commands grouped by category
       const categories = fs.readdirSync(commandsDir, { withFileTypes: true })
         .filter(dirent => dirent.isDirectory())
         .map(dirent => dirent.name);
@@ -86,49 +103,7 @@ module.exports = (client => {
 
         for (const file of commandFiles) {
           const commandName = path.basename(file, '.js');
-          const commandPath = path.join(categoryDir, file);
-
-          try { delete require.cache[require.resolve(commandPath)]; } catch {}
-          let commandModule;
-          try { commandModule = require(commandPath); } catch {
-            commandsListLines.push(`- /${commandName} (failed to load)`);
-            continue;
-          }
-
-          const dataRaw = commandModule?.data
-            ? (typeof commandModule.data.toJSON === 'function' ? commandModule.data.toJSON() : commandModule.data)
-            : null;
-
-          const options = Array.isArray(dataRaw?.options) ? dataRaw.options : [];
-
-          if (options.length === 0) {
-            commandsListLines.push(`- /${commandName}`);
-            continue;
-          }
-
-          const topSubcommands = options.filter(opt =>
-            opt.type === ApplicationCommandOptionType.Subcommand
-          );
-          const groups = options.filter(opt =>
-            opt.type === ApplicationCommandOptionType.SubcommandGroup
-          );
-
-          if (topSubcommands.length === 0 && groups.length === 0) {
-            commandsListLines.push(`- /${commandName}`);
-            continue;
-          }
-
           commandsListLines.push(`- /${commandName}`);
-          for (const sub of topSubcommands) {
-            commandsListLines.push(`  - /${commandName} ${sub.name}`);
-          }
-          for (const group of groups) {
-            commandsListLines.push(`  - ${group.name}`);
-            const groupOptions = Array.isArray(group.options) ? group.options : [];
-            for (const sub of groupOptions) {
-              commandsListLines.push(`    - /${commandName} ${group.name} ${sub.name}`);
-            }
-          }
         }
 
         const value = commandsListLines.length > 0 ? commandsListLines.join('\n') : 'No commands found';
@@ -142,14 +117,13 @@ module.exports = (client => {
       await interaction.reply({ embeds: [commandsEmbed] });
     },
 
-    // Handle autocomplete suggestions
     async autocomplete(interaction) {
       const focusedValue = interaction.options.getFocused();
-      const allCommands = getAllCommands(commandsDir);
+      const mainCommands = getMainCommands(commandsDir);
 
-      const filtered = allCommands
+      const filtered = mainCommands
         .filter(c => c.name.toLowerCase().includes(focusedValue.toLowerCase()))
-        .slice(0, 25) // Discord limit
+        .slice(0, 25)
         .map(c => ({
           name: `/${c.name} (${c.category})`,
           value: c.name
