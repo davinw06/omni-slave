@@ -52,7 +52,7 @@ module.exports = (client => {
         option
           .setName('category')
           .setDescription('Select a command category')
-          .setRequired(true)
+          .setRequired(false)
           .addChoices(...categoryChoices)
       )
       .addStringOption(option =>
