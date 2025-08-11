@@ -85,7 +85,7 @@ module.exports = (client => {
         return;
       }
 
-      // Default: list all commands grouped by category
+      // Default: list all commands grouped by category, with subcommands
       const categories = fs.readdirSync(commandsDir, { withFileTypes: true })
         .filter(dirent => dirent.isDirectory())
         .map(dirent => dirent.name);
@@ -103,7 +103,45 @@ module.exports = (client => {
 
         for (const file of commandFiles) {
           const commandName = path.basename(file, '.js');
+          const commandPath = path.join(categoryDir, file);
+
+          try { delete require.cache[require.resolve(commandPath)]; } catch {}
+          let commandModule;
+          try { commandModule = require(commandPath); } catch {
+            commandsListLines.push(`- /${commandName} (failed to load)`);
+            continue;
+          }
+
+          const dataRaw = commandModule?.data
+            ? (typeof commandModule.data.toJSON === 'function' ? commandModule.data.toJSON() : commandModule.data)
+            : null;
+
+          const options = Array.isArray(dataRaw?.options) ? dataRaw.options : [];
+
+          if (options.length === 0) {
+            commandsListLines.push(`- /${commandName}`);
+            continue;
+          }
+
+          const topSubcommands = options.filter(opt => opt.type === ApplicationCommandOptionType.Subcommand);
+          const groups = options.filter(opt => opt.type === ApplicationCommandOptionType.SubcommandGroup);
+
+          if (topSubcommands.length === 0 && groups.length === 0) {
+            commandsListLines.push(`- /${commandName}`);
+            continue;
+          }
+
           commandsListLines.push(`- /${commandName}`);
+          for (const sub of topSubcommands) {
+            commandsListLines.push(`  - /${commandName} ${sub.name}`);
+          }
+          for (const group of groups) {
+            commandsListLines.push(`  - ${group.name}`);
+            const groupOptions = Array.isArray(group.options) ? group.options : [];
+            for (const sub of groupOptions) {
+              commandsListLines.push(`    - /${commandName} ${group.name} ${sub.name}`);
+            }
+          }
         }
 
         const value = commandsListLines.length > 0 ? commandsListLines.join('\n') : 'No commands found';
