@@ -161,6 +161,6 @@ module.exports = (client => {
       await interaction.reply({ embeds: [commandsEmbed] });
     },
 
-    // Removed autocomplete method entirely
+    // autocomplete method removed since not needed with static choices
   };
 })();
