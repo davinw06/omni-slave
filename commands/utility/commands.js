@@ -23,62 +23,65 @@ module.exports = (client => {
   const commandsDir = path.join(__dirname, '..');
   const categoryCommands = getCommandsByCategory(commandsDir);
 
-  // Build SlashCommandBuilder with subcommand groups and subcommands properly
-  const commandBuilder = new SlashCommandBuilder()
-    .setName('commands')
-    .setDescription('Lists all available commands or shows details for one.');
-
-  for (const [category, commands] of Object.entries(categoryCommands)) {
-    commandBuilder.addSubcommandGroup(group => {
-      group
-        .setName(category.toLowerCase())
-        .setDescription(`Commands in the ${category} category`);
-
-      for (const cmd of commands) {
-        group.addSubcommand(sub =>
-          sub
-            .setName(cmd.toLowerCase())
-            .setDescription(`Show details for /${cmd}`)
-        );
-      }
-
-      return group;
-    });
-  }
+  const categoryChoices = Object.keys(categoryCommands).map(cat => ({
+    name: cat.charAt(0).toUpperCase() + cat.slice(1),
+    value: cat,
+  }));
 
   return {
-    data: commandBuilder,
+    data: new SlashCommandBuilder()
+      .setName('commands')
+      .setDescription('Show commands by category and command name')
+      .addStringOption(option =>
+        option
+          .setName('category')
+          .setDescription('Select a command category')
+          .setRequired(true)
+          .addChoices(...categoryChoices)
+      )
+      .addStringOption(option =>
+        option
+          .setName('command')
+          .setDescription('Select a command (optional)')
+          .setRequired(false)
+          .setAutocomplete(true)
+      ),
 
     async execute(interaction) {
-      // Extract selected subcommand group and subcommand
-      const category = interaction.options.getSubcommandGroup(false);
-      const commandName = interaction.options.getSubcommand(false);
+      const category = interaction.options.getString('category');
+      const commandName = interaction.options.getString('command');
 
-      if (!category || !commandName) {
-        // Fallback: list all commands grouped by category
-        const categories = Object.keys(categoryCommands);
-
-        const commandsEmbed = new EmbedBuilder()
-          .setColor('#0099ff')
-          .setTitle('Available Commands')
-          .setDescription('Here is a list of all commands, organized by category.');
-
-        for (const cat of categories) {
-          const cmds = categoryCommands[cat];
-          const lines = cmds.map(cmd => `- /${cmd}`).join('\n') || 'No commands found';
-
-          commandsEmbed.addFields({
-            name: `Category: ${cat.charAt(0).toUpperCase() + cat.slice(1)}`,
-            value: lines,
-            inline: true,
-          });
-        }
-
-        await interaction.reply({ embeds: [commandsEmbed], ephemeral: true });
+      if (!category) {
+        await interaction.reply({ content: 'Please select a category.', ephemeral: true });
         return;
       }
 
-      // Load command module dynamically
+      const commandsInCategory = categoryCommands[category] || [];
+
+      if (!commandName) {
+        // List all commands in the category
+        if (commandsInCategory.length === 0) {
+          await interaction.reply({ content: `No commands found in category **${category}**.`, ephemeral: true });
+          return;
+        }
+
+        const commandsList = commandsInCategory.map(cmd => `- /${cmd}`).join('\n');
+
+        const embed = new EmbedBuilder()
+          .setColor('#0099ff')
+          .setTitle(`Commands in category: ${category.charAt(0).toUpperCase() + category.slice(1)}`)
+          .setDescription(commandsList);
+
+        await interaction.reply({ embeds: [embed], ephemeral: true });
+        return;
+      }
+
+      // User selected a specific command, show details
+      if (!commandsInCategory.includes(commandName)) {
+        await interaction.reply({ content: `Command \`${commandName}\` not found in category \`${category}\`.`, ephemeral: true });
+        return;
+      }
+
       const commandPath = path.join(commandsDir, category, `${commandName}.js`);
 
       try {
@@ -127,6 +130,34 @@ module.exports = (client => {
       });
     },
 
-    // Autocomplete removed since not needed with this structure
+    async autocomplete(interaction) {
+      try {
+        const focusedOption = interaction.options.getFocused(true); // getFocused(true) returns { name, value }
+        const category = interaction.options.getString('category');
+
+        if (focusedOption.name !== 'command') {
+          await interaction.respond([]);
+          return;
+        }
+
+        if (!category || !categoryCommands[category]) {
+          await interaction.respond([]);
+          return;
+        }
+
+        const focusedValue = focusedOption.value.toLowerCase();
+        const possibleCommands = categoryCommands[category] || [];
+
+        const filtered = possibleCommands
+          .filter(cmd => cmd.toLowerCase().includes(focusedValue))
+          .slice(0, 25)
+          .map(cmd => ({ name: cmd, value: cmd }));
+
+        await interaction.respond(filtered);
+      } catch (error) {
+        console.error('Autocomplete error:', error);
+        await interaction.respond([]);
+      }
+    }
   };
 })();
