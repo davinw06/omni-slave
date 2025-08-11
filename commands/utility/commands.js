@@ -34,7 +34,7 @@ module.exports = (client => {
           .setDescription('Select a command to view its details')
           .setRequired(false)
           .addChoices(
-            ...mainCommands.map(c => ({
+            ...mainCommands.slice(0, 25).map(c => ({
               name: `${c.name} (${c.category})`,
               value: c.name,
             }))
