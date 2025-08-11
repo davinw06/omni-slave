@@ -59,13 +59,13 @@ module.exports = (client => {
 
         const lines = [`**/${found.name}** — ${mainDescription}`];
 
-        // Top-level subcommands
+        // Top-level subcommands with descriptions
         const subcommands = options.filter(opt => opt.type === ApplicationCommandOptionType.Subcommand);
         for (const sub of subcommands) {
           lines.push(`• /${found.name} ${sub.name} — ${sub.description || 'No description provided.'}`);
         }
 
-        // Subcommand groups
+        // Subcommand groups with descriptions
         const groups = options.filter(opt => opt.type === ApplicationCommandOptionType.SubcommandGroup);
         for (const group of groups) {
           lines.push(`**${group.name}** — ${group.description || 'No description provided.'}`);
