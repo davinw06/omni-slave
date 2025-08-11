@@ -46,7 +46,7 @@ module.exports = {
         // Check if the command has subcommands
         if (commandModule.data && commandModule.data.options) {
             // Find the subcommands
-            const subcommands = commandModule.data.options.filter(option => option.type === ApplicationCommandOptionType.Subcommand);
+            const subcommands = commandModule.data.options.filter(option => option.type === 1);
             
             if (subcommands.length > 0) {
                 // Add the main command and then the indented subcommands
