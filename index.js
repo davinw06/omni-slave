@@ -10,7 +10,6 @@ const fs = require('node:fs');
 const path = require('node:path');
 const mongoose = require('mongoose');
 const fetch = require('node-fetch');
-const User = require('./Schemas.js/userSchema');
 
 
 const mongoURI = process.env.MONGO_URI;
@@ -61,6 +60,7 @@ const ReactionRole = mongoose.models.ReactionRole || mongoose.model('ReactionRol
 const StickyMessage = require('./Schemas.js/stickyMessageSchema');
 const MessageModel = require('./Schemas.js/messageSchema');
 const afkSchema = require('./Schemas.js/afkSchema');
+const userSchema = require('./Schemas.js/userSchema');
 
 const WELCOME_CHANNEL_ID = '1379585527992291348';
 const GENERAL_CHANNEL_ID = '1379562445248659538';
@@ -212,7 +212,7 @@ client.on(Events.MessageCreate, async message => {
     try {
         // Find the user and increment their messageCount.
         // `upsert: true` will create a new user document if one doesn't exist.
-        await User.findOneAndUpdate(
+        await userSchema.findOneAndUpdate(
             { userId: userId },
             { $inc: { messageCount: 1 } },
             { upsert: true }
