@@ -22,6 +22,7 @@ function getMainCommands(commandsDir) {
 
 module.exports = (client => {
   const commandsDir = path.join(__dirname, '..');
+  const mainCommands = getMainCommands(commandsDir);
 
   return {
     data: new SlashCommandBuilder()
@@ -30,15 +31,20 @@ module.exports = (client => {
       .addStringOption(option =>
         option
           .setName('details')
-          .setDescription('Type a command name to view its details')
-          .setAutocomplete(true)
+          .setDescription('Select a command to view its details')
+          .setRequired(false)
+          .addChoices(
+            ...mainCommands.map(c => ({
+              name: `${c.name} (${c.category})`,
+              value: c.name,
+            }))
+          )
       ),
 
     async execute(interaction) {
       const details = interaction.options.getString('details');
 
       if (details) {
-        const mainCommands = getMainCommands(commandsDir);
         const found = mainCommands.find(c => c.name.toLowerCase() === details.toLowerCase());
 
         if (!found) {
@@ -155,29 +161,6 @@ module.exports = (client => {
       await interaction.reply({ embeds: [commandsEmbed] });
     },
 
-    async autocomplete(interaction) {
-      try {
-        const focusedValue = interaction.options.getFocused();
-        if (!focusedValue) {
-          await interaction.respond([]);
-          return;
-        }
-
-        const mainCommands = getMainCommands(commandsDir);
-
-        const filtered = mainCommands
-          .filter(c => c.name.toLowerCase().includes(focusedValue.toLowerCase()))
-          .slice(0, 25)
-          .map(c => ({
-            name: `/${c.name} (${c.category})`,
-            value: c.name
-          }));
-
-        await interaction.respond(filtered);
-      } catch (error) {
-        console.error('Autocomplete error:', error);
-        await interaction.respond([]);
-      }
-    }
+    // Removed autocomplete method entirely
   };
 })();
