@@ -2,113 +2,160 @@ const { SlashCommandBuilder, EmbedBuilder, ApplicationCommandOptionType } = requ
 const fs = require('fs');
 const path = require('path');
 
-// This command reads the /commands folder structure and builds an embed
-// showing commands, subcommands, and subcommand-groups with proper indentation.
+// Dynamically load command choices for the details option
+function getCommandChoices(commandsDir) {
+  const choices = [];
+  const categories = fs.readdirSync(commandsDir, { withFileTypes: true })
+    .filter(dirent => dirent.isDirectory())
+    .map(dirent => dirent.name);
 
-module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('commands')
-    .setDescription('Lists all available commands.'),
+  for (const category of categories) {
+    const categoryDir = path.join(commandsDir, category);
+    const commandFiles = fs.readdirSync(categoryDir).filter(f => f.endsWith('.js'));
 
-  async execute(interaction) {
-    // Adjust this if your commands directory is in a different place
-    const commandsDir = path.join(__dirname, '..');
+    for (const file of commandFiles) {
+      const commandName = path.basename(file, '.js');
+      choices.push({ name: `/${commandName}`, value: commandName });
+    }
+  }
+  return choices;
+}
 
-    const categories = fs.readdirSync(commandsDir, { withFileTypes: true })
-      .filter(dirent => dirent.isDirectory())
-      .map(dirent => dirent.name);
+module.exports = (client => {
+  const commandsDir = path.join(__dirname, '..');
+  const commandChoices = getCommandChoices(commandsDir);
 
-    const commandsEmbed = new EmbedBuilder()
-      .setColor('#0099ff')
-      .setTitle('Available Commands')
-      .setDescription('Here is a list of all commands, organized by category.');
+  return {
+    data: new SlashCommandBuilder()
+      .setName('commands')
+      .setDescription('Lists all available commands or shows details for one.')
+      .addStringOption(option =>
+        option
+          .setName('details')
+          .setDescription('Select a command to view its description')
+          .addChoices(...commandChoices)
+      ),
 
-    for (const category of categories) {
-      const categoryDir = path.join(commandsDir, category);
-      const commandFiles = fs.readdirSync(categoryDir).filter(f => f.endsWith('.js'));
+    async execute(interaction) {
+      const details = interaction.options.getString('details');
 
-      // We'll build the category value as lines, then join with newlines
-      const commandsListLines = [];
+      // If user asked for a specific command's details
+      if (details) {
+        let found = false;
 
-      for (const file of commandFiles) {
-        const commandName = path.basename(file, '.js');
-        const commandPath = path.join(categoryDir, file);
+        const categories = fs.readdirSync(commandsDir, { withFileTypes: true })
+          .filter(dirent => dirent.isDirectory())
+          .map(dirent => dirent.name);
 
-        // Try to reload the module in case it changed while the bot is running
-        try {
-          delete require.cache[require.resolve(commandPath)];
-        } catch (e) {
-          // ignore
-        }
+        for (const category of categories) {
+          const categoryDir = path.join(commandsDir, category);
+          const commandFiles = fs.readdirSync(categoryDir).filter(f => f.endsWith('.js'));
 
-        let commandModule;
-        try {
-          commandModule = require(commandPath);
-        } catch (err) {
-          // If a command file has a runtime error, skip it but keep listing the filename
-          commandsListLines.push(`- /${commandName} (failed to load)`);
-          continue;
-        }
+          for (const file of commandFiles) {
+            const commandName = path.basename(file, '.js');
+            if (commandName === details) {
+              const commandPath = path.join(categoryDir, file);
+              delete require.cache[require.resolve(commandPath)];
+              const commandModule = require(commandPath);
 
-        // Extract the raw data object. SlashCommandBuilder instances have toJSON().
-        const dataRaw = commandModule?.data
-          ? (typeof commandModule.data.toJSON === 'function' ? commandModule.data.toJSON() : commandModule.data)
-          : null;
+              const dataRaw = commandModule?.data
+                ? (typeof commandModule.data.toJSON === 'function' ? commandModule.data.toJSON() : commandModule.data)
+                : null;
 
-        const options = Array.isArray(dataRaw?.options) ? dataRaw.options : [];
-
-        // If no options at all, treat it as a simple command
-        if (options.length === 0) {
-          commandsListLines.push(`- /${commandName}`);
-          continue;
-        }
-
-        // Identify top-level subcommands and subcommand-groups
-        const topSubcommands = options.filter(opt =>
-          opt.type === ApplicationCommandOptionType.Subcommand || String(opt.type) === String(ApplicationCommandOptionType.Subcommand)
-        );
-
-        const groups = options.filter(opt =>
-          opt.type === ApplicationCommandOptionType.SubcommandGroup || String(opt.type) === String(ApplicationCommandOptionType.SubcommandGroup)
-        );
-
-        // If there are no subcommands/groups (options are flags/args), list as a normal command
-        if (topSubcommands.length === 0 && groups.length === 0) {
-          commandsListLines.push(`- /${commandName}`);
-          continue;
-        }
-
-        // Add main command header
-        commandsListLines.push(`- /${commandName}`);
-
-        // Add top-level subcommands (indented by two spaces)
-        for (const sub of topSubcommands) {
-          // Some builders may omit `type` on nested objects, but `name` should exist
-          commandsListLines.push(`  - /${commandName} ${sub.name}`);
-        }
-
-        // Add groups and their subcommands (group name, then subcommands indented further)
-        for (const group of groups) {
-          commandsListLines.push(`  - ${group.name}`);
-          const groupOptions = Array.isArray(group.options) ? group.options : [];
-
-          for (const sub of groupOptions) {
-            // Treat any option under a group as a subcommand
-            commandsListLines.push(`    - /${commandName} ${group.name} ${sub.name}`);
+              const description = dataRaw?.description || 'No description provided.';
+              await interaction.reply({
+                embeds: [
+                  new EmbedBuilder()
+                    .setColor('#00ff99')
+                    .setTitle(`/${commandName}`)
+                    .setDescription(description)
+                ]
+              });
+              found = true;
+              break;
+            }
           }
+          if (found) break;
         }
+
+        if (!found) {
+          await interaction.reply({ content: `No description found for /${details}.`, ephemeral: true });
+        }
+        return;
       }
 
-      const value = commandsListLines.length > 0 ? commandsListLines.join('\n') : 'No commands found';
+      // Otherwise, run your existing list-all behavior
+      const categories = fs.readdirSync(commandsDir, { withFileTypes: true })
+        .filter(dirent => dirent.isDirectory())
+        .map(dirent => dirent.name);
 
-      // Add the category field. Keep inline: true to keep a compact embed (same as original).
-      commandsEmbed.addFields({
-        name: `Category: ${category.charAt(0).toUpperCase() + category.slice(1)}`,
-        value,
-        inline: true,
-      });
-    }
+      const commandsEmbed = new EmbedBuilder()
+        .setColor('#0099ff')
+        .setTitle('Available Commands')
+        .setDescription('Here is a list of all commands, organized by category.');
 
-    await interaction.reply({ embeds: [commandsEmbed] });
-  },
-};
+      for (const category of categories) {
+        const categoryDir = path.join(commandsDir, category);
+        const commandFiles = fs.readdirSync(categoryDir).filter(f => f.endsWith('.js'));
+
+        const commandsListLines = [];
+
+        for (const file of commandFiles) {
+          const commandName = path.basename(file, '.js');
+          const commandPath = path.join(categoryDir, file);
+
+          try { delete require.cache[require.resolve(commandPath)]; } catch {}
+          let commandModule;
+          try { commandModule = require(commandPath); } catch {
+            commandsListLines.push(`- /${commandName} (failed to load)`);
+            continue;
+          }
+
+          const dataRaw = commandModule?.data
+            ? (typeof commandModule.data.toJSON === 'function' ? commandModule.data.toJSON() : commandModule.data)
+            : null;
+
+          const options = Array.isArray(dataRaw?.options) ? dataRaw.options : [];
+
+          if (options.length === 0) {
+            commandsListLines.push(`- /${commandName}`);
+            continue;
+          }
+
+          const topSubcommands = options.filter(opt =>
+            opt.type === ApplicationCommandOptionType.Subcommand
+          );
+          const groups = options.filter(opt =>
+            opt.type === ApplicationCommandOptionType.SubcommandGroup
+          );
+
+          if (topSubcommands.length === 0 && groups.length === 0) {
+            commandsListLines.push(`- /${commandName}`);
+            continue;
+          }
+
+          commandsListLines.push(`- /${commandName}`);
+          for (const sub of topSubcommands) {
+            commandsListLines.push(`  - /${commandName} ${sub.name}`);
+          }
+          for (const group of groups) {
+            commandsListLines.push(`  - ${group.name}`);
+            const groupOptions = Array.isArray(group.options) ? group.options : [];
+            for (const sub of groupOptions) {
+              commandsListLines.push(`    - /${commandName} ${group.name} ${sub.name}`);
+            }
+          }
+        }
+
+        const value = commandsListLines.length > 0 ? commandsListLines.join('\n') : 'No commands found';
+        commandsEmbed.addFields({
+          name: `Category: ${category.charAt(0).toUpperCase() + category.slice(1)}`,
+          value,
+          inline: true,
+        });
+      }
+
+      await interaction.reply({ embeds: [commandsEmbed] });
+    },
+  };
+})();
