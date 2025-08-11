@@ -2,89 +2,113 @@ const { SlashCommandBuilder, EmbedBuilder, ApplicationCommandOptionType } = requ
 const fs = require('fs');
 const path = require('path');
 
-// This is the commands command itself. It will read the file system and
-// generate an embed with a list of all available commands.
+// This command reads the /commands folder structure and builds an embed
+// showing commands, subcommands, and subcommand-groups with proper indentation.
 
 module.exports = {
-  // Command definition using SlashCommandBuilder
-  // This is a common pattern for creating slash commands with Discord.js
   data: new SlashCommandBuilder()
     .setName('commands')
     .setDescription('Lists all available commands.'),
 
-  /**
-   * The execute function is called when the user runs the /commands command.
-   * @param {Interaction} interaction The interaction object from the Discord API.
-   */
   async execute(interaction) {
-    // Navigate up two directories to reach the /commands folder
+    // Adjust this if your commands directory is in a different place
     const commandsDir = path.join(__dirname, '..');
 
-    // Dynamically get the command categories (subdirectories of /commands)
     const categories = fs.readdirSync(commandsDir, { withFileTypes: true })
       .filter(dirent => dirent.isDirectory())
       .map(dirent => dirent.name);
 
-    // Create a new EmbedBuilder
     const commandsEmbed = new EmbedBuilder()
       .setColor('#0099ff')
       .setTitle('Available Commands')
       .setDescription('Here is a list of all commands, organized by category.');
 
-    // Loop through each category and build the embed fields
     for (const category of categories) {
       const categoryDir = path.join(commandsDir, category);
-      const commandFiles = fs.readdirSync(categoryDir).filter(file => file.endsWith('.js'));
+      const commandFiles = fs.readdirSync(categoryDir).filter(f => f.endsWith('.js'));
 
-      let commandsList = '';
-      
+      // We'll build the category value as lines, then join with newlines
+      const commandsListLines = [];
+
       for (const file of commandFiles) {
         const commandName = path.basename(file, '.js');
         const commandPath = path.join(categoryDir, file);
-        const commandModule = require(commandPath);
-        
-        let subcommands = [];
 
-        // Check for subcommands and subcommand groups
-        if (commandModule.data && commandModule.data.options) {
-          for (const option of commandModule.data.options) {
-            // Found a top-level subcommand
-            if (option.type === ApplicationCommandOptionType.Subcommand) {
-              subcommands.push(`/${commandName} ${option.name}`);
-            }
-            // Found a subcommand group
-            else if (option.type === ApplicationCommandOptionType.SubcommandGroup) {
-              // Iterate through the subcommand group's options to find its subcommands
-              if (option.options) {
-                for (const subOption of option.options) {
-                  subcommands.push(`/${commandName} ${option.name} ${subOption.name}`);
-                }
-              }
-            }
-          }
+        // Try to reload the module in case it changed while the bot is running
+        try {
+          delete require.cache[require.resolve(commandPath)];
+        } catch (e) {
+          // ignore
         }
-        
-        // If subcommands were found, list the main command and then the indented subcommands
-        if (subcommands.length > 0) {
-          commandsList += `\n- /${commandName}`;
-          for (const subcommand of subcommands) {
-            commandsList += `\n  - ${subcommand}`;
+
+        let commandModule;
+        try {
+          commandModule = require(commandPath);
+        } catch (err) {
+          // If a command file has a runtime error, skip it but keep listing the filename
+          commandsListLines.push(`- /${commandName} (failed to load)`);
+          continue;
+        }
+
+        // Extract the raw data object. SlashCommandBuilder instances have toJSON().
+        const dataRaw = commandModule?.data
+          ? (typeof commandModule.data.toJSON === 'function' ? commandModule.data.toJSON() : commandModule.data)
+          : null;
+
+        const options = Array.isArray(dataRaw?.options) ? dataRaw.options : [];
+
+        // If no options at all, treat it as a simple command
+        if (options.length === 0) {
+          commandsListLines.push(`- /${commandName}`);
+          continue;
+        }
+
+        // Identify top-level subcommands and subcommand-groups
+        const topSubcommands = options.filter(opt =>
+          opt.type === ApplicationCommandOptionType.Subcommand || String(opt.type) === String(ApplicationCommandOptionType.Subcommand)
+        );
+
+        const groups = options.filter(opt =>
+          opt.type === ApplicationCommandOptionType.SubcommandGroup || String(opt.type) === String(ApplicationCommandOptionType.SubcommandGroup)
+        );
+
+        // If there are no subcommands/groups (options are flags/args), list as a normal command
+        if (topSubcommands.length === 0 && groups.length === 0) {
+          commandsListLines.push(`- /${commandName}`);
+          continue;
+        }
+
+        // Add main command header
+        commandsListLines.push(`- /${commandName}`);
+
+        // Add top-level subcommands (indented by two spaces)
+        for (const sub of topSubcommands) {
+          // Some builders may omit `type` on nested objects, but `name` should exist
+          commandsListLines.push(`  - /${commandName} ${sub.name}`);
+        }
+
+        // Add groups and their subcommands (group name, then subcommands indented further)
+        for (const group of groups) {
+          commandsListLines.push(`  - ${group.name}`);
+          const groupOptions = Array.isArray(group.options) ? group.options : [];
+
+          for (const sub of groupOptions) {
+            // Treat any option under a group as a subcommand
+            commandsListLines.push(`    - /${commandName} ${group.name} ${sub.name}`);
           }
-        } else {
-            // For all other commands, just add the command name as a list item
-            commandsList += `\n- /${commandName}`;
         }
       }
 
-      // Add a field for each category
-      commandsEmbed.addFields({ 
-        name: `Category: ${category.charAt(0).toUpperCase() + category.slice(1)}`, 
-        value: commandsList.trim(), 
-        inline: true 
+      const value = commandsListLines.length > 0 ? commandsListLines.join('\n') : 'No commands found';
+
+      // Add the category field. Keep inline: true to keep a compact embed (same as original).
+      commandsEmbed.addFields({
+        name: `Category: ${category.charAt(0).toUpperCase() + category.slice(1)}`,
+        value,
+        inline: true,
       });
     }
 
-    // Send the completed embed
     await interaction.reply({ embeds: [commandsEmbed] });
   },
 };
