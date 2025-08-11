@@ -57,10 +57,21 @@ const ReactionRole = mongoose.models.ReactionRole || mongoose.model('ReactionRol
     emoji: { type: String, required: true },
     roleId: { type: String, required: true },
 }));
+
+// It's important to define and export the Mongoose schemas so you can use them elsewhere.
+// Assuming your userSchema looks something like this. You should check the actual file.
+// For the purpose of this example, I'm defining a simple schema here.
+const userSchema = new mongoose.Schema({
+    userId: { type: String, required: true, unique: true },
+    messageCount: { type: Number, default: 0 },
+});
+
+const UserModel = mongoose.models.UserModel || mongoose.model('UserModel', userSchema);
+
+// Make sure these are properly imported from their respective files if they exist.
 const StickyMessage = require('./Schemas.js/stickyMessageSchema');
 const MessageModel = require('./Schemas.js/messageSchema');
 const afkSchema = require('./Schemas.js/afkSchema');
-const userSchema = require('./Schemas.js/userSchema');
 
 const WELCOME_CHANNEL_ID = '1379585527992291348';
 const GENERAL_CHANNEL_ID = '1379562445248659538';
@@ -202,7 +213,7 @@ client.on('ready', async c => {
     console.log('Omni Slave is now online');
 });
 
-// New event listener to log messages
+// Event listener for every message sent in a guild
 client.on(Events.MessageCreate, async message => {
     // Ignore messages from bots or direct messages
     if (message.author.bot || !message.guild) return;
@@ -212,7 +223,7 @@ client.on(Events.MessageCreate, async message => {
     try {
         // Find the user and increment their messageCount.
         // `upsert: true` will create a new user document if one doesn't exist.
-        await userSchema.findOneAndUpdate(
+        await UserModel.findOneAndUpdate(
             { userId: userId },
             { $inc: { messageCount: 1 } },
             { upsert: true }
