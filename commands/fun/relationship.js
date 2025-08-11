@@ -744,7 +744,7 @@ module.exports = {
 
                             if(target.roles.cache.has(AgeRoleID)) {
                                 if(!initiator.roles.cache.has(AgeRoleID)) {
-                                    if(!initiator.roles.highest.position > interaction.guild.members.me.roles.highest.position) {
+                                    if(initiator.roles.highest.position < interaction.guild.members.me.roles.highest.position) {
                                         const duration = 5;
                                         await interaction.followUp(`Oh no! Looks like <@${target.id}> was a minor! The FBI has been contacted...`)
                                         const randomint = Math.floor(Math.random() * 12) + 1;
@@ -836,7 +836,7 @@ module.exports = {
 
                     if(target.roles.cache.has(AgeRoleID)) {
                         if(!initiator.roles.cache.has(AgeRoleID)) {
-                            if(!initiator.roles.highest.position > interaction.guild.members.me.roles.highest.position) {
+                            if(initiator.roles.highest.position < interaction.guild.members.me.roles.highest.position) {
                                 const duration = 5;
                                 await interaction.followUp(`Oh no! Looks like <@${target.id}> was a minor! The FBI has been contacted...`)
                                 const randomint = Math.floor(Math.random() * 12) + 1;

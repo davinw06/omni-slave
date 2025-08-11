@@ -69,7 +69,7 @@ module.exports = {
 
 
         if(targetMember.roles.cache.has(AgeRoleID)) {
-            if(!interaction.member.roles.highest.position > interaction.guild.members.me.roles.highest.position) {
+            if(interaction.member.roles.highest.position < interaction.guild.members.me.roles.highest.position) {
                 if(!interaction.member.roles.cache.has(AgeRoleID)) {
                     await interaction.followUp(`Oh no! Looks like <@${user.id}> was a minor! The FBI will reach you any minute now...`)
                     const randomint = Math.floor(Math.random() * 12) + 1;
