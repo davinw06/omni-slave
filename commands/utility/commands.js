@@ -156,18 +156,28 @@ module.exports = (client => {
     },
 
     async autocomplete(interaction) {
-      const focusedValue = interaction.options.getFocused();
-      const mainCommands = getMainCommands(commandsDir);
+      try {
+        const focusedValue = interaction.options.getFocused();
+        if (!focusedValue) {
+          await interaction.respond([]);
+          return;
+        }
 
-      const filtered = mainCommands
-        .filter(c => c.name.toLowerCase().includes(focusedValue.toLowerCase()))
-        .slice(0, 25)
-        .map(c => ({
-          name: `/${c.name} (${c.category})`,
-          value: c.name
-        }));
+        const mainCommands = getMainCommands(commandsDir);
 
-      await interaction.respond(filtered);
+        const filtered = mainCommands
+          .filter(c => c.name.toLowerCase().includes(focusedValue.toLowerCase()))
+          .slice(0, 25)
+          .map(c => ({
+            name: `/${c.name} (${c.category})`,
+            value: c.name
+          }));
+
+        await interaction.respond(filtered);
+      } catch (error) {
+        console.error('Autocomplete error:', error);
+        await interaction.respond([]);
+      }
     }
   };
 })();
