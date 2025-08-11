@@ -2,165 +2,133 @@ const { SlashCommandBuilder, EmbedBuilder, ApplicationCommandOptionType } = requ
 const fs = require('fs');
 const path = require('path');
 
-function getMainCommands(commandsDir) {
-  const commandsList = [];
+function getCommandsByCategory(commandsDir) {
   const categories = fs.readdirSync(commandsDir, { withFileTypes: true })
     .filter(dirent => dirent.isDirectory())
     .map(dirent => dirent.name);
+
+  const categoryCommands = {};
 
   for (const category of categories) {
     const categoryDir = path.join(commandsDir, category);
     const commandFiles = fs.readdirSync(categoryDir).filter(f => f.endsWith('.js'));
 
-    for (const file of commandFiles) {
-      const commandName = path.basename(file, '.js');
-      commandsList.push({ name: commandName, category });
-    }
+    categoryCommands[category] = commandFiles.map(file => path.basename(file, '.js'));
   }
-  return commandsList;
+
+  return categoryCommands;
 }
 
 module.exports = (client => {
   const commandsDir = path.join(__dirname, '..');
-  const mainCommands = getMainCommands(commandsDir);
+  const categoryCommands = getCommandsByCategory(commandsDir);
+
+  // Build SlashCommandBuilder with subcommand groups and subcommands
+  const commandBuilder = new SlashCommandBuilder()
+    .setName('commands')
+    .setDescription('Lists all available commands or shows details for one.');
+
+  for (const [category, commands] of Object.entries(categoryCommands)) {
+    commandBuilder.addSubcommandGroup(group =>
+      group
+        .setName(category.toLowerCase())
+        .setDescription(`Commands in the ${category} category`)
+        .addSubcommands(
+          ...commands.map(cmd =>
+            new SlashCommandBuilder()
+              .setName(cmd.toLowerCase())
+              .setDescription(`Show details for /${cmd}`)
+          ).map(sub => ({
+            name: sub.name,
+            description: sub.description,
+            type: ApplicationCommandOptionType.Subcommand,
+            options: [],
+          }))
+        )
+    );
+  }
 
   return {
-    data: new SlashCommandBuilder()
-      .setName('commands')
-      .setDescription('Lists all available commands or shows details for one.')
-      .addStringOption(option =>
-        option
-          .setName('details')
-          .setDescription('Select a command to view its details')
-          .setRequired(false)
-          .addChoices(
-            ...mainCommands.slice(0, 25).map(c => ({
-              name: `${c.name} (${c.category})`,
-              value: c.name,
-            }))
-          )
-      ),
+    data: commandBuilder,
 
     async execute(interaction) {
-      const details = interaction.options.getString('details');
+      // Extract selected subcommand group and subcommand
+      const category = interaction.options.getSubcommandGroup(false);
+      const commandName = interaction.options.getSubcommand(false);
 
-      if (details) {
-        const found = mainCommands.find(c => c.name.toLowerCase() === details.toLowerCase());
+      if (!category || !commandName) {
+        // Fallback: list all commands grouped by category
+        const categories = Object.keys(categoryCommands);
 
-        if (!found) {
-          await interaction.reply({ content: `Command \`${details}\` not found.`, ephemeral: true });
-          return;
+        const commandsEmbed = new EmbedBuilder()
+          .setColor('#0099ff')
+          .setTitle('Available Commands')
+          .setDescription('Here is a list of all commands, organized by category.');
+
+        for (const cat of categories) {
+          const cmds = categoryCommands[cat];
+          const lines = cmds.map(cmd => `- /${cmd}`).join('\n') || 'No commands found';
+
+          commandsEmbed.addFields({
+            name: `Category: ${cat.charAt(0).toUpperCase() + cat.slice(1)}`,
+            value: lines,
+            inline: true,
+          });
         }
 
-        const commandPath = path.join(commandsDir, found.category, `${found.name}.js`);
-        delete require.cache[require.resolve(commandPath)];
-        const commandModule = require(commandPath);
-
-        const dataRaw = commandModule?.data
-          ? (typeof commandModule.data.toJSON === 'function' ? commandModule.data.toJSON() : commandModule.data)
-          : null;
-
-        const mainDescription = dataRaw?.description || 'No description provided.';
-        const options = Array.isArray(dataRaw?.options) ? dataRaw.options : [];
-
-        const lines = [`**/${found.name}** — ${mainDescription}`];
-
-        // Top-level subcommands with descriptions
-        const subcommands = options.filter(opt => opt.type === ApplicationCommandOptionType.Subcommand);
-        for (const sub of subcommands) {
-          lines.push(`• /${found.name} ${sub.name} — ${sub.description || 'No description provided.'}`);
-        }
-
-        // Subcommand groups with descriptions
-        const groups = options.filter(opt => opt.type === ApplicationCommandOptionType.SubcommandGroup);
-        for (const group of groups) {
-          lines.push(`**${group.name}** — ${group.description || 'No description provided.'}`);
-          for (const sub of (group.options || [])) {
-            lines.push(`    • /${found.name} ${group.name} ${sub.name} — ${sub.description || 'No description provided.'}`);
-          }
-        }
-
-        await interaction.reply({
-          embeds: [
-            new EmbedBuilder()
-              .setColor('#00ff99')
-              .setTitle(`Command Details: /${found.name}`)
-              .setDescription(lines.join('\n'))
-          ]
-        });
+        await interaction.reply({ embeds: [commandsEmbed], ephemeral: true });
         return;
       }
 
-      // Default: list all commands grouped by category, with subcommands
-      const categories = fs.readdirSync(commandsDir, { withFileTypes: true })
-        .filter(dirent => dirent.isDirectory())
-        .map(dirent => dirent.name);
+      // Load command module dynamically
+      const commandPath = path.join(commandsDir, category, `${commandName}.js`);
 
-      const commandsEmbed = new EmbedBuilder()
-        .setColor('#0099ff')
-        .setTitle('Available Commands')
-        .setDescription('Here is a list of all commands, organized by category.');
+      try {
+        delete require.cache[require.resolve(commandPath)];
+      } catch {}
 
-      for (const category of categories) {
-        const categoryDir = path.join(commandsDir, category);
-        const commandFiles = fs.readdirSync(categoryDir).filter(f => f.endsWith('.js'));
-
-        const commandsListLines = [];
-
-        for (const file of commandFiles) {
-          const commandName = path.basename(file, '.js');
-          const commandPath = path.join(categoryDir, file);
-
-          try { delete require.cache[require.resolve(commandPath)]; } catch {}
-          let commandModule;
-          try { commandModule = require(commandPath); } catch {
-            commandsListLines.push(`- /${commandName} (failed to load)`);
-            continue;
-          }
-
-          const dataRaw = commandModule?.data
-            ? (typeof commandModule.data.toJSON === 'function' ? commandModule.data.toJSON() : commandModule.data)
-            : null;
-
-          const options = Array.isArray(dataRaw?.options) ? dataRaw.options : [];
-
-          if (options.length === 0) {
-            commandsListLines.push(`- /${commandName}`);
-            continue;
-          }
-
-          const topSubcommands = options.filter(opt => opt.type === ApplicationCommandOptionType.Subcommand);
-          const groups = options.filter(opt => opt.type === ApplicationCommandOptionType.SubcommandGroup);
-
-          if (topSubcommands.length === 0 && groups.length === 0) {
-            commandsListLines.push(`- /${commandName}`);
-            continue;
-          }
-
-          commandsListLines.push(`- /${commandName}`);
-          for (const sub of topSubcommands) {
-            commandsListLines.push(`  - /${commandName} ${sub.name}`);
-          }
-          for (const group of groups) {
-            commandsListLines.push(`  - ${group.name}`);
-            const groupOptions = Array.isArray(group.options) ? group.options : [];
-            for (const sub of groupOptions) {
-              commandsListLines.push(`    - /${commandName} ${group.name} ${sub.name}`);
-            }
-          }
-        }
-
-        const value = commandsListLines.length > 0 ? commandsListLines.join('\n') : 'No commands found';
-        commandsEmbed.addFields({
-          name: `Category: ${category.charAt(0).toUpperCase() + category.slice(1)}`,
-          value,
-          inline: true,
-        });
+      let commandModule;
+      try {
+        commandModule = require(commandPath);
+      } catch (err) {
+        await interaction.reply({ content: `Failed to load /${commandName} command.`, ephemeral: true });
+        return;
       }
 
-      await interaction.reply({ embeds: [commandsEmbed] });
+      const dataRaw = commandModule?.data
+        ? (typeof commandModule.data.toJSON === 'function' ? commandModule.data.toJSON() : commandModule.data)
+        : null;
+
+      const mainDescription = dataRaw?.description || 'No description provided.';
+      const options = Array.isArray(dataRaw?.options) ? dataRaw.options : [];
+
+      const lines = [`**/${commandName}** — ${mainDescription}`];
+
+      // Top-level subcommands with descriptions
+      const subcommands = options.filter(opt => opt.type === ApplicationCommandOptionType.Subcommand);
+      for (const sub of subcommands) {
+        lines.push(`• /${commandName} ${sub.name} — ${sub.description || 'No description provided.'}`);
+      }
+
+      // Subcommand groups with descriptions
+      const groups = options.filter(opt => opt.type === ApplicationCommandOptionType.SubcommandGroup);
+      for (const group of groups) {
+        lines.push(`**${group.name}** — ${group.description || 'No description provided.'}`);
+        for (const sub of (group.options || [])) {
+          lines.push(`    • /${commandName} ${group.name} ${sub.name} — ${sub.description || 'No description provided.'}`);
+        }
+      }
+
+      await interaction.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor('#00ff99')
+            .setTitle(`Command Details: /${commandName}`)
+            .setDescription(lines.join('\n'))
+        ]
+      });
     },
 
-    // autocomplete method removed since not needed with static choices
+    // Removed autocomplete since it’s no longer needed with subcommand groups
   };
 })();
