@@ -29,24 +29,25 @@ module.exports = (client => {
     value: cat,
   }));
 
-  // Flatten all commands into one list with category prefix for the command choices
+  // Prepare command choices per category for the 'command' option (flattened commands from all categories, max 25)
+  // Since we want commands per category, we'll only add commands from all categories, but can't do dynamic filtering here
   const allCommands = [];
   for (const [category, commands] of Object.entries(categoryCommands)) {
     for (const cmd of commands) {
       allCommands.push({
         name: `${category.charAt(0).toUpperCase() + category.slice(1)}: ${cmd}`,
-        value: `${category}|${cmd}`, // combine category and command for easy splitting later
+        value: `${category}|${cmd}`, // store category and command for parsing later
       });
     }
   }
 
-  // Limit commands to 25 because of Discord limit
+  // Limit to 25 to obey Discord API limits
   const limitedCommands = allCommands.slice(0, 25);
 
   return {
     data: new SlashCommandBuilder()
       .setName('commands')
-      .setDescription('Show commands by category and command name')
+      .setDescription('Show commands by category or list all commands')
       .addStringOption(option =>
         option
           .setName('category')
@@ -66,36 +67,34 @@ module.exports = (client => {
       const category = interaction.options.getString('category');
       const commandValue = interaction.options.getString('command');
 
-      if (!category) {
-        await interaction.reply({ content: 'Please select a category.', ephemeral: true });
-        return;
-      }
-
+      // If user did not pick a command, list ALL commands from ALL categories
       if (!commandValue) {
-        // List all commands in the category
-        const commandsInCategory = categoryCommands[category] || [];
-
-        if (commandsInCategory.length === 0) {
-          await interaction.reply({ content: `No commands found in category **${category}**.`, ephemeral: true });
-          return;
-        }
-
-        const commandsList = commandsInCategory.map(cmd => `- /${cmd}`).join('\n');
-
         const embed = new EmbedBuilder()
           .setColor('#0099ff')
-          .setTitle(`Commands in category: ${category.charAt(0).toUpperCase() + category.slice(1)}`)
-          .setDescription(commandsList);
+          .setTitle('All Available Commands')
+          .setDescription('Here is a list of all commands, organized by category.');
+
+        for (const [cat, cmds] of Object.entries(categoryCommands)) {
+          const cmdsText = cmds.length > 0 ? cmds.map(c => `- /${c}`).join('\n') : 'No commands found.';
+          embed.addFields({
+            name: `Category: ${cat.charAt(0).toUpperCase() + cat.slice(1)}`,
+            value: cmdsText,
+            inline: true,
+          });
+        }
 
         await interaction.reply({ embeds: [embed], ephemeral: true });
         return;
       }
 
-      // commandValue is like "category|command"
+      // User selected a command; parse category and command from value
       const [cmdCategory, commandName] = commandValue.split('|');
 
       if (cmdCategory !== category) {
-        await interaction.reply({ content: `Selected command does not belong to selected category. Please choose matching category and command.`, ephemeral: true });
+        await interaction.reply({
+          content: 'The selected command does not belong to the selected category. Please choose matching category and command.',
+          ephemeral: true,
+        });
         return;
       }
 
@@ -122,13 +121,13 @@ module.exports = (client => {
 
       const lines = [`**/${commandName}** — ${mainDescription}`];
 
-      // Top-level subcommands with descriptions
+      // Show subcommands if any
       const subcommands = options.filter(opt => opt.type === ApplicationCommandOptionType.Subcommand);
       for (const sub of subcommands) {
         lines.push(`• /${commandName} ${sub.name} — ${sub.description || 'No description provided.'}`);
       }
 
-      // Subcommand groups with descriptions
+      // Show subcommand groups if any
       const groups = options.filter(opt => opt.type === ApplicationCommandOptionType.SubcommandGroup);
       for (const group of groups) {
         lines.push(`**${group.name}** — ${group.description || 'No description provided.'}`);
@@ -142,11 +141,11 @@ module.exports = (client => {
           new EmbedBuilder()
             .setColor('#00ff99')
             .setTitle(`Command Details: /${commandName}`)
-            .setDescription(lines.join('\n'))
-        ]
+            .setDescription(lines.join('\n')),
+        ],
       });
     },
 
-    // Removed autocomplete entirely as requested
+    // No autocomplete since you want static choices
   };
 })();
