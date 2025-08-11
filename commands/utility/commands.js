@@ -43,23 +43,41 @@ module.exports = {
         const commandPath = path.join(categoryDir, file);
         const commandModule = require(commandPath);
         
-        // Check if the command has subcommands
+        // Check if the command has options
         if (commandModule.data && commandModule.data.options) {
-            // Find the subcommands
-            const subcommands = commandModule.data.options.filter(option => option.type === 1);
-            
-            if (subcommands.length > 0) {
-                // Add the main command and then the indented subcommands
-                commandsList += `\n- /${commandName}`;
-                for (const subcommand of subcommands) {
-                    commandsList += `\n  - ${subcommand.name}`;
-                }
-            } else {
-                // If there are no subcommands, just list the command
-                commandsList += `\n- /${commandName}`;
+          let subcommandsFound = false;
+          
+          // Add the main command line
+          commandsList += `\n- /${commandName}`;
+
+          // Loop through all options to find subcommands and subcommand groups
+          for (const option of commandModule.data.options) {
+            // Check for a top-level subcommand
+            if (option.type === ApplicationCommandOptionType.Subcommand) {
+              commandsList += `\n  - ${option.name}`;
+              subcommandsFound = true;
             }
+            // Check for a subcommand group
+            else if (option.type === ApplicationCommandOptionType.SubcommandGroup) {
+              // Iterate through the subcommand group's options to find its subcommands
+              if (option.options) {
+                for (const subOption of option.options) {
+                  commandsList += `\n  - ${option.name} ${subOption.name}`;
+                  subcommandsFound = true;
+                }
+              }
+            }
+          }
+
+          // If no subcommands or subcommand groups were found, just list the command name
+          // The `subcommandsFound` flag handles this logic cleanly
+          if (!subcommandsFound) {
+            commandsList = commandsList.trim(); // Remove the last line break and bullet
+            commandsList += `\n- /${commandName}`;
+          }
+
         } else {
-            // For all other commands, just add the file name as a list item
+            // For commands with no options, just add the file name as a list item
             commandsList += `\n- /${commandName}`;
         }
       }
