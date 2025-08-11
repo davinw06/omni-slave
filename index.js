@@ -220,6 +220,57 @@ client.on(Events.MessageCreate, async message => {
     } catch (error) {
         console.error('Error updating message count:', error);
     }
+    const stickyData = await StickyMessage.findOne({ guildId: message.guild.id, channelId: message.channel.id });
+    
+    // Only proceed if there is a sticky message configured for this channel.
+    if (stickyData) {
+        // Fetch the last 6 messages in the channel to check if the sticky message is still visible.
+        const messages = await message.channel.messages.fetch({ limit: 1 });
+        
+        // Use a more robust check to see if the sticky message is in the fetched messages.
+        // The sticky message is "far enough away" if it's not among the most recent 6 messages.
+        const isStickyFarEnough = !messages.has(stickyData.messageId);
+
+        if (isStickyFarEnough) {
+            try {
+                // Delete the old sticky message if it exists.
+                // Using a try/catch block here is good practice as the message might have been deleted manually.
+                const oldStickyMsg = await message.channel.messages.fetch(stickyData.messageId).catch(err => {
+                    // Log the error but don't stop the process, as the message may just not exist.
+                    console.error('Error fetching old sticky message for deletion, it may have been deleted already:', err);
+                    return null;
+                });
+                
+                if (oldStickyMsg) {
+                    await oldStickyMsg.delete();
+                }
+            } catch (err) {
+                console.error('Error deleting old sticky message:', err);
+            }
+            
+            // Send the new sticky message.
+            const newStickyMsg = await message.channel.send({ content: stickyData.content });
+            
+            // Update the sticky message ID in the database.
+            stickyData.messageId = newStickyMsg.id;
+            await stickyData.save();
+        }
+    }
+
+    const checkAfk = await afkSchema.findOne({ Guild: message.guild.id, User: message.author.id });
+    if (checkAfk) {
+        await afkSchema.deleteMany({ Guild: message.guild.id, User: message.author.id });
+        await message.reply({ content: `Welcome back <@${message.author.id}>! You are no longer AFK.` });
+    } else {
+        const members = message.mentions.users.first();
+        if (members) {
+            const afkData = await afkSchema.findOne({ Guild: message.guild.id, User: members.id });
+            if (afkData) {
+                const reason = afkData.Message || "I'm busy right now.";
+                await message.reply({ content: `${members.tag} is AFK. Reason: **${reason}**` });
+            }
+        }
+    }
 });
 
 // New event listeners to handle reaction roles
@@ -351,65 +402,6 @@ client.on(Events.InteractionCreate, async interaction => {
             } catch (error) {
                 console.error('Error setting sticky message:', error);
                 await interaction.editReply({ content: 'There was an error setting the sticky message.', ephemeral: true });
-            }
-        }
-    }
-});
-
-client.on(Events.MessageCreate, async message => {
-    // Check if the message is from a bot or in a DM channel, and if so, ignore it.
-    if (message.author.bot || !message.guild) return;
-
-    // Sticky message logic
-    const stickyData = await StickyMessage.findOne({ guildId: message.guild.id, channelId: message.channel.id });
-    
-    // Only proceed if there is a sticky message configured for this channel.
-    if (stickyData) {
-        // Fetch the last 6 messages in the channel to check if the sticky message is still visible.
-        const messages = await message.channel.messages.fetch({ limit: 1 });
-        
-        // Use a more robust check to see if the sticky message is in the fetched messages.
-        // The sticky message is "far enough away" if it's not among the most recent 6 messages.
-        const isStickyFarEnough = !messages.has(stickyData.messageId);
-
-        if (isStickyFarEnough) {
-            try {
-                // Delete the old sticky message if it exists.
-                // Using a try/catch block here is good practice as the message might have been deleted manually.
-                const oldStickyMsg = await message.channel.messages.fetch(stickyData.messageId).catch(err => {
-                    // Log the error but don't stop the process, as the message may just not exist.
-                    console.error('Error fetching old sticky message for deletion, it may have been deleted already:', err);
-                    return null;
-                });
-                
-                if (oldStickyMsg) {
-                    await oldStickyMsg.delete();
-                }
-            } catch (err) {
-                console.error('Error deleting old sticky message:', err);
-            }
-            
-            // Send the new sticky message.
-            const newStickyMsg = await message.channel.send({ content: stickyData.content });
-            
-            // Update the sticky message ID in the database.
-            stickyData.messageId = newStickyMsg.id;
-            await stickyData.save();
-        }
-    }
-
-    // AFK logic
-    const checkAfk = await afkSchema.findOne({ Guild: message.guild.id, User: message.author.id });
-    if (checkAfk) {
-        await afkSchema.deleteMany({ Guild: message.guild.id, User: message.author.id });
-        await message.reply({ content: `Welcome back <@${message.author.id}>! You are no longer AFK.` });
-    } else {
-        const members = message.mentions.users.first();
-        if (members) {
-            const afkData = await afkSchema.findOne({ Guild: message.guild.id, User: members.id });
-            if (afkData) {
-                const reason = afkData.Message || "I'm busy right now.";
-                await message.reply({ content: `${members.tag} is AFK. Reason: **${reason}**` });
             }
         }
     }
