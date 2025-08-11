@@ -23,10 +23,25 @@ module.exports = (client => {
   const commandsDir = path.join(__dirname, '..');
   const categoryCommands = getCommandsByCategory(commandsDir);
 
+  // Prepare choices for categories
   const categoryChoices = Object.keys(categoryCommands).map(cat => ({
     name: cat.charAt(0).toUpperCase() + cat.slice(1),
     value: cat,
   }));
+
+  // Flatten all commands into one list with category prefix for the command choices
+  const allCommands = [];
+  for (const [category, commands] of Object.entries(categoryCommands)) {
+    for (const cmd of commands) {
+      allCommands.push({
+        name: `${category.charAt(0).toUpperCase() + category.slice(1)}: ${cmd}`,
+        value: `${category}|${cmd}`, // combine category and command for easy splitting later
+      });
+    }
+  }
+
+  // Limit commands to 25 because of Discord limit
+  const limitedCommands = allCommands.slice(0, 25);
 
   return {
     data: new SlashCommandBuilder()
@@ -44,22 +59,22 @@ module.exports = (client => {
           .setName('command')
           .setDescription('Select a command (optional)')
           .setRequired(false)
-          .setAutocomplete(true)
+          .addChoices(...limitedCommands)
       ),
 
     async execute(interaction) {
       const category = interaction.options.getString('category');
-      const commandName = interaction.options.getString('command');
+      const commandValue = interaction.options.getString('command');
 
       if (!category) {
         await interaction.reply({ content: 'Please select a category.', ephemeral: true });
         return;
       }
 
-      const commandsInCategory = categoryCommands[category] || [];
-
-      if (!commandName) {
+      if (!commandValue) {
         // List all commands in the category
+        const commandsInCategory = categoryCommands[category] || [];
+
         if (commandsInCategory.length === 0) {
           await interaction.reply({ content: `No commands found in category **${category}**.`, ephemeral: true });
           return;
@@ -76,13 +91,15 @@ module.exports = (client => {
         return;
       }
 
-      // User selected a specific command, show details
-      if (!commandsInCategory.includes(commandName)) {
-        await interaction.reply({ content: `Command \`${commandName}\` not found in category \`${category}\`.`, ephemeral: true });
+      // commandValue is like "category|command"
+      const [cmdCategory, commandName] = commandValue.split('|');
+
+      if (cmdCategory !== category) {
+        await interaction.reply({ content: `Selected command does not belong to selected category. Please choose matching category and command.`, ephemeral: true });
         return;
       }
 
-      const commandPath = path.join(commandsDir, category, `${commandName}.js`);
+      const commandPath = path.join(commandsDir, cmdCategory, `${commandName}.js`);
 
       try {
         delete require.cache[require.resolve(commandPath)];
@@ -130,34 +147,6 @@ module.exports = (client => {
       });
     },
 
-    async autocomplete(interaction) {
-      try {
-        const focusedOption = interaction.options.getFocused(true); // getFocused(true) returns { name, value }
-        const category = interaction.options.getString('category');
-
-        if (focusedOption.name !== 'command') {
-          await interaction.respond([]);
-          return;
-        }
-
-        if (!category || !categoryCommands[category]) {
-          await interaction.respond([]);
-          return;
-        }
-
-        const focusedValue = focusedOption.value.toLowerCase();
-        const possibleCommands = categoryCommands[category] || [];
-
-        const filtered = possibleCommands
-          .filter(cmd => cmd.toLowerCase().includes(focusedValue))
-          .slice(0, 25)
-          .map(cmd => ({ name: cmd, value: cmd }));
-
-        await interaction.respond(filtered);
-      } catch (error) {
-        console.error('Autocomplete error:', error);
-        await interaction.respond([]);
-      }
-    }
+    // Removed autocomplete entirely as requested
   };
 })();
