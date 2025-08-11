@@ -39,12 +39,13 @@ module.exports = {
             }
 
             const authorAvatarURL = interaction.user.displayAvatarURL({ format: 'png', dynamic: true });
+            const currentYear = new Date().getFullYear();
 
             // Create a new embed to display the leaderboard.
             const leaderboardEmbed = new EmbedBuilder()
                 .setColor(0x00CD45)
                 .setTitle(`🏆 Server Message Leaderboard 🏆`)
-                .setDescription('The top 3 Grand Master Baiters 🎣🎣')
+                .setDescription(`The top 3 Grand Yappers of ${currentYear}`)
                 .setImage('https://i.imgur.com/UziA3fD.png')
                 .setTimestamp()
                 .setFooter({ text: `Requested by: ${interaction.user.displayName}`, iconURL: authorAvatarURL });
