@@ -2,9 +2,8 @@ const { SlashCommandBuilder, EmbedBuilder, ApplicationCommandOptionType } = requ
 const fs = require('fs');
 const path = require('path');
 
-// Dynamically load command choices for the details option
-function getCommandChoices(commandsDir) {
-  const choices = [];
+function getAllCommands(commandsDir) {
+  const commandsList = [];
   const categories = fs.readdirSync(commandsDir, { withFileTypes: true })
     .filter(dirent => dirent.isDirectory())
     .map(dirent => dirent.name);
@@ -15,15 +14,14 @@ function getCommandChoices(commandsDir) {
 
     for (const file of commandFiles) {
       const commandName = path.basename(file, '.js');
-      choices.push({ name: `/${commandName}`, value: commandName });
+      commandsList.push({ name: commandName, category });
     }
   }
-  return choices;
+  return commandsList;
 }
 
 module.exports = (client => {
   const commandsDir = path.join(__dirname, '..');
-  const commandChoices = getCommandChoices(commandsDir);
 
   return {
     data: new SlashCommandBuilder()
@@ -32,59 +30,45 @@ module.exports = (client => {
       .addStringOption(option =>
         option
           .setName('details')
-          .setDescription('Select a command to view its description')
-          .addChoices(...commandChoices)
+          .setDescription('Type a command name to view its description')
+          .setAutocomplete(true)
       ),
 
+    // Handle the main command execution
     async execute(interaction) {
       const details = interaction.options.getString('details');
 
-      // If user asked for a specific command's details
       if (details) {
-        let found = false;
+        // Show just that command's description
+        const allCommands = getAllCommands(commandsDir);
+        const foundCommand = allCommands.find(c => c.name.toLowerCase() === details.toLowerCase());
 
-        const categories = fs.readdirSync(commandsDir, { withFileTypes: true })
-          .filter(dirent => dirent.isDirectory())
-          .map(dirent => dirent.name);
-
-        for (const category of categories) {
-          const categoryDir = path.join(commandsDir, category);
-          const commandFiles = fs.readdirSync(categoryDir).filter(f => f.endsWith('.js'));
-
-          for (const file of commandFiles) {
-            const commandName = path.basename(file, '.js');
-            if (commandName === details) {
-              const commandPath = path.join(categoryDir, file);
-              delete require.cache[require.resolve(commandPath)];
-              const commandModule = require(commandPath);
-
-              const dataRaw = commandModule?.data
-                ? (typeof commandModule.data.toJSON === 'function' ? commandModule.data.toJSON() : commandModule.data)
-                : null;
-
-              const description = dataRaw?.description || 'No description provided.';
-              await interaction.reply({
-                embeds: [
-                  new EmbedBuilder()
-                    .setColor('#00ff99')
-                    .setTitle(`/${commandName}`)
-                    .setDescription(description)
-                ]
-              });
-              found = true;
-              break;
-            }
-          }
-          if (found) break;
+        if (!foundCommand) {
+          await interaction.reply({ content: `Command \`${details}\` not found.`, ephemeral: true });
+          return;
         }
 
-        if (!found) {
-          await interaction.reply({ content: `No description found for /${details}.`, ephemeral: true });
-        }
+        const commandPath = path.join(commandsDir, foundCommand.category, `${foundCommand.name}.js`);
+        delete require.cache[require.resolve(commandPath)];
+        const commandModule = require(commandPath);
+
+        const dataRaw = commandModule?.data
+          ? (typeof commandModule.data.toJSON === 'function' ? commandModule.data.toJSON() : commandModule.data)
+          : null;
+
+        const description = dataRaw?.description || 'No description provided.';
+        await interaction.reply({
+          embeds: [
+            new EmbedBuilder()
+              .setColor('#00ff99')
+              .setTitle(`/${foundCommand.name}`)
+              .setDescription(description)
+          ]
+        });
         return;
       }
 
-      // Otherwise, run your existing list-all behavior
+      // Otherwise, show full list
       const categories = fs.readdirSync(commandsDir, { withFileTypes: true })
         .filter(dirent => dirent.isDirectory())
         .map(dirent => dirent.name);
@@ -157,5 +141,21 @@ module.exports = (client => {
 
       await interaction.reply({ embeds: [commandsEmbed] });
     },
+
+    // Handle autocomplete suggestions
+    async autocomplete(interaction) {
+      const focusedValue = interaction.options.getFocused();
+      const allCommands = getAllCommands(commandsDir);
+
+      const filtered = allCommands
+        .filter(c => c.name.toLowerCase().includes(focusedValue.toLowerCase()))
+        .slice(0, 25) // Discord limit
+        .map(c => ({
+          name: `/${c.name} (${c.category})`,
+          value: c.name
+        }));
+
+      await interaction.respond(filtered);
+    }
   };
 })();
