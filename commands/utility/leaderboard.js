@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const MessageModel = require('../../Schemas.js/messageSchema'); // Adjust this path if necessary
+const UserModel = require('../../Schemas.js/userSchema'); // Correctly import the User model
 const mongoose = require('mongoose');
 
 module.exports = {
@@ -20,28 +20,22 @@ module.exports = {
         }
 
         try {
-            // Aggregation pipeline to get the top 3 users.
-            const topUsers = await MessageModel.aggregate([
-                { $match: { guildId: interaction.guild.id } },
-                { $group: { _id: '$userId', count: { $sum: 1 } } },
-                { $sort: { count: -1 } },
-                { $limit: 3 },
-            ]);
+            // Fetch the top 3 users based on messageCount, not by grouping messages.
+            const topUsers = await UserModel.find({ messageCount: { $gt: 0 } })
+                .sort({ messageCount: -1 })
+                .limit(3);
 
-            // Aggregation pipeline to get the rank of all users for ranking purposes.
-            const allUsers = await MessageModel.aggregate([
-                { $match: { guildId: interaction.guild.id } },
-                { $group: { _id: '$userId', count: { $sum: 1 } } },
-                { $sort: { count: -1 } },
-            ]);
+            // Fetch all users to determine the current user's rank.
+            const allUsers = await UserModel.find({ messageCount: { $gt: 0 } })
+                .sort({ messageCount: -1 });
 
             // Find the current user's rank and message count.
             let userRank = 'N/A';
             let userMessageCount = 0;
-            const currentUserData = allUsers.find(user => user._id === interaction.user.id);
+            const currentUserData = allUsers.find(user => user.userId === interaction.user.id);
             if (currentUserData) {
                 userRank = allUsers.indexOf(currentUserData) + 1;
-                userMessageCount = currentUserData.count.toLocaleString();
+                userMessageCount = currentUserData.messageCount.toLocaleString();
             }
 
             const authorAvatarURL = interaction.user.displayAvatarURL({ format: 'png', dynamic: true });
@@ -49,8 +43,8 @@ module.exports = {
             // Create a new embed to display the leaderboard.
             const leaderboardEmbed = new EmbedBuilder()
                 .setColor(0x00CD45)
-                .setTitle(`🏆 Server Message Leaderboard🏆`)
-                .setDescription('The top 3 Grand Master Baiters🔥🔥')
+                .setTitle(`🏆 Server Message Leaderboard 🏆`)
+                .setDescription('The top 3 Grand Master Baiters 🎣🎣')
                 .setImage('https://i.imgur.com/UziA3fD.png')
                 .setTimestamp()
                 .setFooter({ text: `Requested by: ${interaction.user.displayName}`, iconURL: authorAvatarURL });
@@ -59,17 +53,17 @@ module.exports = {
             if (topUsers.length > 0) {
                 for (const [index, userData] of topUsers.entries()) {
                     try {
-                        const user = await interaction.client.users.fetch(userData._id);
+                        const user = await interaction.client.users.fetch(userData.userId);
                         leaderboardEmbed.addFields({
                             name: `#${index + 1}. ${user.displayName}`,
-                            value: `${userData.count.toLocaleString()} messages`,
+                            value: `${userData.messageCount.toLocaleString()} messages`,
                             inline: false
                         });
                     } catch (error) {
-                        console.error(`Could not fetch user with ID ${userData._id}:`, error);
+                        console.error(`Could not fetch user with ID ${userData.userId}:`, error);
                         leaderboardEmbed.addFields({
                             name: `${index + 1}. Unknown User`,
-                            value: `${userData.count.toLocaleString()} messages`,
+                            value: `${userData.messageCount.toLocaleString()} messages`,
                             inline: false
                         });
                     }

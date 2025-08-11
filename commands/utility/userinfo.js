@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const MessageModel = require('../../Schemas.js/messageSchema');
+const UserModel = require('../../Schemas.js/userSchema'); // Correctly import the User model
 const mongoose = require('mongoose');
 
 module.exports = {
@@ -28,19 +28,21 @@ module.exports = {
         }
 
         let messageCount = 'Not available (DB not ready or logging not set up)';
-        if (MessageModel && mongoose.connection.readyState === 1) {
+        if (UserModel && mongoose.connection.readyState === 1) {
             try {
-                const count = await MessageModel.countDocuments({
-                    userId: targetUser.id,
-                    guildId: interaction.guild.id
-                });
-                messageCount = count;
+                // Find the user's document and get their messageCount
+                const userDoc = await UserModel.findOne({ userId: targetUser.id });
+                if (userDoc) {
+                    messageCount = userDoc.messageCount;
+                } else {
+                    messageCount = 0; // User has no messages in the database
+                }
             } catch (error) {
                 console.error("Error fetching message count from MongoDB:", error);
                 messageCount = 'Error fetching data';
             }
         } else {
-             console.warn("MessageModel not loaded or Mongoose not connected. Cannot fetch message count.");
+             console.warn("UserModel not loaded or Mongoose not connected. Cannot fetch message count.");
         }
 
         const fields = [
