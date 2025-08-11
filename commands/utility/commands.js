@@ -43,41 +43,35 @@ module.exports = {
         const commandPath = path.join(categoryDir, file);
         const commandModule = require(commandPath);
         
-        // Check if the command has options
-        if (commandModule.data && commandModule.data.options) {
-          let subcommandsFound = false;
-          
-          // Add the main command line
-          commandsList += `\n- /${commandName}`;
+        let subcommands = [];
 
-          // Loop through all options to find subcommands and subcommand groups
+        // Check for subcommands and subcommand groups
+        if (commandModule.data && commandModule.data.options) {
           for (const option of commandModule.data.options) {
-            // Check for a top-level subcommand
+            // Found a top-level subcommand
             if (option.type === ApplicationCommandOptionType.Subcommand) {
-              commandsList += `\n  - ${option.name}`;
-              subcommandsFound = true;
+              subcommands.push(`/${commandName} ${option.name}`);
             }
-            // Check for a subcommand group
+            // Found a subcommand group
             else if (option.type === ApplicationCommandOptionType.SubcommandGroup) {
               // Iterate through the subcommand group's options to find its subcommands
               if (option.options) {
                 for (const subOption of option.options) {
-                  commandsList += `\n  - ${option.name} ${subOption.name}`;
-                  subcommandsFound = true;
+                  subcommands.push(`/${commandName} ${option.name} ${subOption.name}`);
                 }
               }
             }
           }
-
-          // If no subcommands or subcommand groups were found, just list the command name
-          // The `subcommandsFound` flag handles this logic cleanly
-          if (!subcommandsFound) {
-            commandsList = commandsList.trim(); // Remove the last line break and bullet
-            commandsList += `\n- /${commandName}`;
+        }
+        
+        // If subcommands were found, list the main command and then the indented subcommands
+        if (subcommands.length > 0) {
+          commandsList += `\n- /${commandName}`;
+          for (const subcommand of subcommands) {
+            commandsList += `\n  - ${subcommand}`;
           }
-
         } else {
-            // For commands with no options, just add the file name as a list item
+            // For all other commands, just add the command name as a list item
             commandsList += `\n- /${commandName}`;
         }
       }
