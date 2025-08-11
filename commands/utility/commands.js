@@ -23,29 +23,27 @@ module.exports = (client => {
   const commandsDir = path.join(__dirname, '..');
   const categoryCommands = getCommandsByCategory(commandsDir);
 
-  // Build SlashCommandBuilder with subcommand groups and subcommands
+  // Build SlashCommandBuilder with subcommand groups and subcommands properly
   const commandBuilder = new SlashCommandBuilder()
     .setName('commands')
     .setDescription('Lists all available commands or shows details for one.');
 
   for (const [category, commands] of Object.entries(categoryCommands)) {
-    commandBuilder.addSubcommandGroup(group =>
+    commandBuilder.addSubcommandGroup(group => {
       group
         .setName(category.toLowerCase())
-        .setDescription(`Commands in the ${category} category`)
-        .addSubcommands(
-          ...commands.map(cmd =>
-            new SlashCommandBuilder()
-              .setName(cmd.toLowerCase())
-              .setDescription(`Show details for /${cmd}`)
-          ).map(sub => ({
-            name: sub.name,
-            description: sub.description,
-            type: ApplicationCommandOptionType.Subcommand,
-            options: [],
-          }))
-        )
-    );
+        .setDescription(`Commands in the ${category} category`);
+
+      for (const cmd of commands) {
+        group.addSubcommand(sub =>
+          sub
+            .setName(cmd.toLowerCase())
+            .setDescription(`Show details for /${cmd}`)
+        );
+      }
+
+      return group;
+    });
   }
 
   return {
@@ -129,6 +127,6 @@ module.exports = (client => {
       });
     },
 
-    // Removed autocomplete since it’s no longer needed with subcommand groups
+    // Autocomplete removed since not needed with this structure
   };
 })();
