@@ -25,12 +25,15 @@ module.exports = {
 
             let userAvatar = avatar;
             let attachments = [];
+            const canvasSize = 512;
+            const avCanvasSize = 456;
+            const avPosition = (canvasSize - avCanvasSize)/2;
 
             if (decoration) {
-                const canvas = createCanvas(512, 512);
+                const canvas = createCanvas(canvasSize, canvasSize);
                 const context = canvas.getContext('2d');
 
-                const avCanvas = createCanvas(400, 400);
+                const avCanvas = createCanvas(avCanvasSize, avCanvasSize);
                 const avContext = avCanvas.getContext('2d');
 
                 avContext.beginPath();
@@ -39,12 +42,12 @@ module.exports = {
                 avContext.clip();
 
                 const av = await loadImage(avatar);
-                avContext.drawImage(av, 0, 0, 400, 400);
+                avContext.drawImage(av, 0, 0, avCanvas, avCanvas);
 
-                context.drawImage(avCanvas, 56, 56, 400, 400);
+                context.drawImage(avCanvas, avPosition, avPosition, avCanvasSize, avCanvasSize);
 
                 const decor = await loadImage(decoration);
-                context.drawImage(decor, 0, 0, 512, 512);
+                context.drawImage(decor, 0, 0, canvasSize, canvasSize);
 
                 const buffer = canvas.toBuffer();
                 const attachment = new AttachmentBuilder(buffer, { name: 'profile.png' });
