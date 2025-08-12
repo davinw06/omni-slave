@@ -435,14 +435,13 @@ client.on('guildMemberRemove', async member => {
         const kickedLog = auditLogs.entries.first();
         if (kickedLog && kickedLog.target.id === member.id) {
             const { executor, reason } = kickedLog;
-            const executorMember = guild.members.cache.get(executor.id);
 
             farewellChannel.send(`**${member.displayName}** was kicked from the server! Goodbye and good riddance!🍻`);
             if (!loggingChannel) return;
             const kickEmbed = new EmbedBuilder()
                 .setTitle('Member Kicked')
                 .addFields(
-                    { name: 'Kicked by', value: executor ? executorMember.displayName : 'Unknown', inline: false },
+                    { name: 'Kicked by', value: executor ? executor.tag : 'Unknown', inline: false },
                     { name: 'Reason', value: reason || 'No reason provided.', inline: false },
                 )
                 .setColor('#ff0000')
