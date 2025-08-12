@@ -402,15 +402,17 @@ client.on(Events.InteractionCreate, async interaction => {
 });
 
 client.on('guildMemberAdd', async member => {
+    const welcomeChannel = member.guild.channels.cache.get(WELCOME_CHANNEL_ID);
+    const loggingChannel = member.guild.channels.cache.get(LOGGING_CHANNEL_ID);
 
-    if(!WELCOME_CHANNEL_ID) {
+    if(!welcomeChannel) {
         console.log('Welcome Channel does not exist!');
     }
 
     let welcomeEmbed = new EmbedBuilder()
         .setImage('https://i.imgur.com/KQxfKhA_d.png?maxwidth=520&shape=thumb&fidelity=high');
     
-    WELCOME_CHANNEL_ID.send({ embeds: [welcomeEmbed], content: `Welcome <@${member.id}> to **${member.guild.name}**, 
+    welcomeChannel.send({ embeds: [welcomeEmbed], content: `Welcome <@${member.id}> to **${member.guild.name}**, 
         we hope you enjoy your stay! Go to ${GENERAL_CHANNEL_ID} to chat with others or ${INTRODUCTION_CHANNEL_ID} to introduce yourself to everyone. 
         Read up on ${CHAT_CLIPS_CHANNEL_ID} to learn more about our server. Check out ${REACTION_ROLES_CHANNEL_ID} to change your colors or change your roles.` 
     })
@@ -425,12 +427,14 @@ client.on('guildMemberAdd', async member => {
         )
         .setTimestamp();
 
-    LOGGING_CHANNEL_ID.send()
+    loggingChannel.send({ embeds: [welcomeLoggingEmbed] });
 });
 
 client.on('guildMemberRemove', async member => {
+    const farewellChannel = member.guild.channels.cache.get(FAREWELL_CHANNEL_ID);
+    const loggingChannel = member.guild.channels.cache.get(LOGGING_CHANNEL_ID);
 
-    if(!FAREWELL_CHANNEL_ID) {
+    if(!farewellChannel) {
         console.log('Departure Channel does not exist!');
     }
 
@@ -445,7 +449,7 @@ client.on('guildMemberRemove', async member => {
         const { executor, reason } = kickedLog;
 
         if(kickedLog && kickedLog.target.id === member.id) {
-            FAREWELL_CHANNEL_ID.send(`${member.displayName} was kicked from the server! Goodbye and good riddance!🍻`);
+            farewellChannel.send(`${member.displayName} was kicked from the server! Goodbye and good riddance!🍻`);
             const kickEmbed = new EmbedBuilder()
                 .setTitle('Member Kicked')
                 .addFields(
@@ -455,8 +459,9 @@ client.on('guildMemberRemove', async member => {
                 .setColor('#ff0000')
                 .setThumbnail(member.displayAvatarURL({ format: 'png', size: 1024 }))
                 .setTimestamp();
+            loggingChannel.send({ embeds: [kickEmbed] });
         } else {
-            FAREWELL_CHANNEL_ID.send(`Goodbye ${member.displayName}! We hope you had a good time in our server!👋`);
+            farewellChannel.send(`Goodbye ${member.displayName}! We hope you had a good time in our server!👋`);
             const leaveLoggingEmbed = new EmbedBuilder()
                 .setTitle(`Member Left`)
                 .setThumbnail(member.displayAvatarURL({ format: 'png', size: 1024 }))
@@ -466,11 +471,11 @@ client.on('guildMemberRemove', async member => {
                     { name: 'DisplayName', value: member.displayName, inline: false },
                 )
                 .setTimestamp();
-            LOGGING_CHANNEL_ID.send({ embeds: leaveLoggingEmbed });
+            loggingChannel.send({ embeds: leaveLoggingEmbed });
         }
     } catch(error) {
         console.log('An error has occured in sending departure message for kicked member!', error);
-        FAREWELL_CHANNEL_ID.send(`Goodbye ${member.displayName}! We hope you had a good time in our server!👋`);
+        farewellChannel.send(`Goodbye ${member.displayName}! We hope you had a good time in our server!👋`);
         const leaveLoggingEmbed = new EmbedBuilder()
             .setTitle(`Member Left`)
             .setThumbnail(member.displayAvatarURL({ format: 'png', size: 1024 }))
@@ -480,7 +485,7 @@ client.on('guildMemberRemove', async member => {
                 { name: 'DisplayName', value: member.displayName, inline: false },
             )
             .setTimestamp();
-        LOGGING_CHANNEL_ID.send({ embeds: leaveLoggingEmbed });
+        loggingChannel.send({ embeds: leaveLoggingEmbed });
     }
 
 });
