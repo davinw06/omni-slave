@@ -25,10 +25,43 @@ module.exports = {
         const bannerUrl = user.bannerURL({ size: 1024, format: 'png' });
         const accentColor = user.hexAccentColor || '#000000'; // Default to black if no accent color
 
+        const avatar = user.displayAvatarURL({ extension: 'png', size: 512 });
+        const decoration = user.avatarDecorationURL ? user.avatarDecorationURL({ extension: 'png', size: 512 }) : null ;
+
+        let userAvatar = avatar;
+        let attachments = [];
+
+        if(decoration) {
+            const canvas = createCanvas(512, 512);
+            const context = canvas.getContext('2d');
+
+            const avCanvas = createCanvas(400, 400);
+            const avContext = avCanvas.getContext('2d');
+
+            avContext.beginPath();
+            avContext.arc(200, 200, 200, 0, Math.PI * 2, true); // center (256,256), radius 256
+            avContext.closePath();
+            avContext.clip();
+
+            const av = await loadImage(avatar);
+            avContext.drawImage(av, 0, 0, 400, 400);
+
+            context.drawImage(avCanvas, 56, 56, 400, 400);
+
+            const decor = await loadImage(decoration);
+            context.drawImage(decor, 0, 0, 512, 512);
+
+            const buffer = canvas.toBuffer();
+            const attachment = new AttachmentBuilder(buffer, {name: 'profile.png'});
+            attachments.push(attachment);
+
+            userAvatar = 'attachment://profile.png';
+        }
+
         const profileEmbed = new EmbedBuilder()
             .setColor(accentColor) // Set the embed color to the user's accent color
             .setTitle(`Profile Card for ${user.displayName}`) // Use displayName for a cleaner look
-            .setThumbnail(user.displayAvatarURL({ dynamic: true, size: 256 })) // User's avatar as thumbnail
+            .setThumbnail(userAvatar) // User's avatar as thumbnail
             .addFields(
                 { name: 'User ID', value: user.id, inline: true },
                 { name: 'Bot', value: user.bot ? 'Yes' : 'No', inline: true },
@@ -52,6 +85,6 @@ module.exports = {
         }
 
         // Reply to the interaction
-        interaction.reply({ embeds: [profileEmbed] });
+        interaction.reply({ embeds: [profileEmbed], files: attachments });
     },
 };
