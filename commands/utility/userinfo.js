@@ -1,4 +1,5 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder } = require('discord.js');
+const { createCanvas, loadImage } = require('canvas');
 const UserModel = require('../../Schemas.js/userSchema'); // Correctly import the User model
 const mongoose = require('mongoose');
 
@@ -96,10 +97,30 @@ module.exports = {
             );
         }
 
+        const avatar = targetUser.displayAvatarURL({ extension: 'png', size: 512 });
+        const decoration = targetUser.avatarDecorationURL({ extension: 'png', size: 512 });
+
+        let userAvatar;
+
+        if(!decoration) {
+            userAvatar = avatar;
+        } else {
+            const canvas = createCanvas(512, 512);
+            const context = canvas.getContext('2d');
+
+            const av = await loadImage(avatar);
+            context.drawImage(av, 0, 0, 512, 512);
+
+            const decor = await loadImage(decoration);
+            context.drawImage(decor, 0, 0, 512, 512);
+
+            userAvatar = new AttachmentBuilder(canvas.toBuffer(), {name: 'profile.png'});
+        }
+
         let userEmbed = new EmbedBuilder()
             .setColor(accentColor)
             .setTitle(`Information for ${targetUser.displayName}`)
-            .setThumbnail(targetUser.displayAvatarURL({ dynamic: true, size: 1024 }))
+            .setThumbnail(userAvatar)
             .setFields(fields)
             .setTimestamp(new Date())
             .setFooter({text: `Requested by ${interaction.user.displayName}`, icon_url: interaction.user.displayAvatarURL({ dynamic: true })})
