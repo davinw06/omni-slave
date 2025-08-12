@@ -1641,7 +1641,7 @@ module.exports = {
                 // Create marriage certificate canvas
                 const canvas = createCanvas(600, 250);
                 const ctx = canvas.getContext('2d');
-                ctx.fillStyle = '#2c3434';
+                ctx.fillStyle = '#2c2c34';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 ctx.fillStyle = '#ffffff';
                 ctx.font = '30px Arial';
@@ -1662,7 +1662,7 @@ module.exports = {
 
                 const embed = new EmbedBuilder()
                     .setColor('#ff69b4')
-                    .setTitle(`💍 Marriage Certificate for ${targetUser.username}`)
+                    .setTitle(`💍 Marriage Certificate for **${targetUser.displayName}**`)
                     .setDescription(`Married to: **${spouse.displayName}**\nMarried for: **${days} days**\nChildren: **${childrenCount}**\nGrandchildren: **${grandchildrenCount}**`)
                     .setImage('attachment://marriage-certificate.png')
                     .setFooter({
