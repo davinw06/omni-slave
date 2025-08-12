@@ -42,7 +42,7 @@ module.exports = {
         const duration = 5;
 
         if(victimMember.roles.cache.has(underage_RoleID)) {
-            if(interaction.member.roles.highest.position < interaction.guild.member.me.roles.highest.position) {
+            if(interaction.member.roles.highest.position < interaction.guild.members.me.roles.highest.position) {
                 if(!initiatorMember.roles.cache.has(underage_RoleID)) {
                     await interaction.followUp(`Looks like <@${victim.id}> was a minor, let's hear what the FBI has to say about this...`);
                     const randomint = Math.floor(Math.random() * 12) + 1;
