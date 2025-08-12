@@ -31,7 +31,7 @@ module.exports = {
         const canvasSize = 1024;
         const avCanvasSize = 864;
         const avPosition = (canvasSize - avCanvasSize)/2;
-        const avCtxArc = 456;
+        const avCtxArc = avCanvasSize/2;
 
         if(decorBoolean === true) {
             if (decoration) {
