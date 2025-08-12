@@ -114,6 +114,7 @@ module.exports = {
 
             const buffer = canvas.toBuffer();
             const attachment = new AttachmentBuilder(buffer, {name: 'profile.png'});
+            attachments.push(attachment);
 
             userAvatar = 'attachment://profile.png';
         }
