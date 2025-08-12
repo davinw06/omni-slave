@@ -1,4 +1,4 @@
-const { EmbedBuilder, SlashCommandBuilder, MessageFlags } = require('discord.js');
+const { EmbedBuilder, SlashCommandBuilder, MessageFlags, AttachmentBuilder } = require('discord.js');
 const { createCanvas, loadImage } = require('canvas');
 
 module.exports = {
