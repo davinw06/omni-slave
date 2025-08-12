@@ -107,7 +107,7 @@ module.exports = {
             const canvas = createCanvas(512, 512);
             const context = canvas.getContext('2d');
 
-            const avCanvas = createCanvas(496, 496);
+            const avCanvas = createCanvas(384, 384);
             const avContext = canvas.getContext('2d');
 
             avContext.beginPath();
