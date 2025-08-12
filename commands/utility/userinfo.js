@@ -107,7 +107,7 @@ module.exports = {
             const canvas = createCanvas(512, 512);
             const context = canvas.getContext('2d');
 
-            const avCanvas = createCanvas(256, 256);
+            const avCanvas = createCanvas(496, 496);
             const avContext = canvas.getContext('2d');
 
             avContext.beginPath();
@@ -116,9 +116,9 @@ module.exports = {
             avContext.clip();
 
             const av = await loadImage(avatar);
-            avContext.drawImage(av, 0, 0, 256, 256);
+            avContext.drawImage(av, 0, 0, 512, 512);
 
-            context.drawImage(avCanvas, 0, 0, 256, 256);
+            context.drawImage(avCanvas, 0, 0, 512, 512);
 
             const decor = await loadImage(decoration);
             context.drawImage(decor, 0, 0, 512, 512);
