@@ -118,7 +118,7 @@ module.exports = {
             const av = await loadImage(avatar);
             avContext.drawImage(av, 0, 0, 512, 512);
 
-            context.drawImage(avCanvas, 0, 0, 512, 512);
+            context.drawImage(avCanvas, 128, 128, 384, 384);
 
             const decor = await loadImage(decoration);
             context.drawImage(decor, 0, 0, 512, 512);
