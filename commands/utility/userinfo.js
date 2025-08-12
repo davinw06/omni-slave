@@ -98,7 +98,7 @@ module.exports = {
         }
 
         const avatar = targetUser.displayAvatarURL({ extension: 'png', size: 512 });
-        const decoration = targetUser.avatarDecorationURL({ extension: 'png', size: 512 });
+        const decoration = targetUser.avatarDecorationURL ? targetUser.avatarDecorationURL({ extension: 'png', size: 512 }) : null ;
 
         let userAvatar = avatar;
         let attachments = [];
