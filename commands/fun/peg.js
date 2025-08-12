@@ -13,7 +13,7 @@ module.exports = {
     
     async execute(interaction) {
         const initiator = interaction.user;
-        const victim = interaction.options.get('user');
+        let victim = interaction.options.get('user');
         if(!victim) victim = interaction.user;
         let initiatorAvatar = initiator.displayAvatarURL({ extension: 'png', size: 1024 });
         let victimAvatar = victim.displayAvatarURL({ extension: 'png', size: 1024 });
