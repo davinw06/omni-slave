@@ -105,6 +105,7 @@ module.exports = {
         const canvasSize = 512;
         const avCanvasSize = 456;
         const avPosition = (canvasSize - avCanvasSize)/2;
+        const avCtxArc = 200;
 
         if (decoration) {
             const canvas = createCanvas(canvasSize, canvasSize);
@@ -114,12 +115,12 @@ module.exports = {
             const avContext = avCanvas.getContext('2d');
 
             avContext.beginPath();
-            avContext.arc(200, 200, 200, 0, Math.PI * 2, true);
+            avContext.arc(avCtxArc, avCtxArc, avCtxArc, 0, Math.PI * 2, true);
             avContext.closePath();
             avContext.clip();
 
             const av = await loadImage(avatar);
-            avContext.drawImage(av, 0, 0, avCanvas, avCanvas);
+            avContext.drawImage(av, 0, 0, avCanvasSize, avCanvasSize);
 
             context.drawImage(avCanvas, avPosition, avPosition, avCanvasSize, avCanvasSize);
 
