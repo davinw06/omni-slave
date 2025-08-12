@@ -33,7 +33,7 @@ module.exports = {
             .setDescription(description)
             .setThumbnail(victimAvatar)
             .setImage(peggingGif)
-            .setColor('#da00ff');
+            .setColor(0xda00ff);
         
         await interaction.reply({ embeds: [pegEmbed] });
 
