@@ -134,6 +134,6 @@ module.exports = {
             userEmbed.addFields({ name: 'Banner', value: 'No custom banner set.', inline: false });
         }
 
-        await interaction.reply({embeds: [userEmbed]});
+        await interaction.reply({embeds: [userEmbed], files: attachments});
     },
 };
