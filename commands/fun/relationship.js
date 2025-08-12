@@ -1114,10 +1114,7 @@ module.exports = {
                     const targetUser = interaction.options.getUser('user') || interaction.user;
                     const guild = interaction.guild;
 
-                    // A helper function to sanitize usernames for drawing on the canvas.
-                    const sanitizeText = (text) => {
-                        return text.replace(/[^a-zA-Z0-9 ]/g, '');
-                    };
+                    const sanitizeText = (text) => text.replace(/[^a-zA-Z0-9 ]/g, '');
 
                     // --- Finding the Family Root ---
                     let rootUserId = targetUser.id;
@@ -1139,7 +1136,7 @@ module.exports = {
                         }
                     }
 
-                    // --- Building the Family Tree Structure from the Root ---
+                    // --- Build Family Tree Map ---
                     const familyTree = new Map();
                     const queue = [rootUserId];
                     const visited = new Set();
@@ -1184,19 +1181,28 @@ module.exports = {
                         });
                     }
 
-                    // --- Canvas Drawing Logic (Revised with Two-Pass Layout) ---
+                    // --- Layout ---
                     const pfpSize = 80;
                     const gap = 40;
                     const userPositions = new Map();
                     let finalWidth = 0;
                     let finalHeight = 0;
 
-                    // Pass 1: Calculate the width of each subtree.
                     const calculateSubtreeWidth = (userId) => {
                         const node = familyTree.get(userId);
                         if (!node) return pfpSize;
 
-                        const childrenWidths = node.children.map(childId => calculateSubtreeWidth(childId));
+                        // Merge children from both spouses
+                        const allChildren = new Set(node.children || []);
+                        for (const spouseId of node.spouses) {
+                            const spouseNode = familyTree.get(spouseId);
+                            if (spouseNode && spouseNode.children) {
+                                spouseNode.children.forEach(c => allChildren.add(c));
+                            }
+                        }
+                        const mergedChildren = Array.from(allChildren);
+
+                        const childrenWidths = mergedChildren.map(childId => calculateSubtreeWidth(childId));
                         let childrenTotalWidth = childrenWidths.reduce((sum, width) => sum + width + gap, 0);
                         childrenTotalWidth = Math.max(0, childrenTotalWidth - gap);
 
@@ -1204,7 +1210,6 @@ module.exports = {
                         return Math.max(selfWidth, childrenTotalWidth);
                     };
 
-                    // Pass 2: Position the elements based on the calculated widths.
                     const positionSubtree = (userId, y, x) => {
                         const node = familyTree.get(userId);
                         if (!node) {
@@ -1214,67 +1219,60 @@ module.exports = {
                             return x + pfpSize + gap;
                         }
 
+                        // Merge children from both spouses
+                        const allChildren = new Set(node.children || []);
+                        for (const spouseId of node.spouses) {
+                            const spouseNode = familyTree.get(spouseId);
+                            if (spouseNode && spouseNode.children) {
+                                spouseNode.children.forEach(c => allChildren.add(c));
+                            }
+                        }
+                        const mergedChildren = Array.from(allChildren);
+
                         const selfWidth = (node.spouses.length + 1) * (pfpSize + gap) - gap;
-                        const childrenWidths = node.children.map(childId => calculateSubtreeWidth(childId));
+                        const childrenWidths = mergedChildren.map(childId => calculateSubtreeWidth(childId));
                         const childrenTotalWidth = childrenWidths.reduce((sum, width) => sum + width + gap, 0) - gap;
                         const totalSubtreeWidth = Math.max(selfWidth, childrenTotalWidth);
 
-                        // Position children first to determine parent's position
-                        if (node.children.length === 1) {
-                            // New logic: For a single child, position the child first...
-                            const childId = node.children[0];
-                            const childWidth = calculateSubtreeWidth(childId);
-                            
-                            // Position the child's subtree
+                        if (mergedChildren.length === 1) {
+                            const childId = mergedChildren[0];
                             positionSubtree(childId, y + pfpSize + gap * 3, x);
                             const childPos = userPositions.get(childId);
-
-                            // ...then center the parent directly above them.
-                            const parentWidth = (node.spouses.length + 1) * (pfpSize + gap) - gap;
-                            
-                            // The center of the child's profile picture
-                            const childPfpCenter = childPos.x + pfpSize / 2;
-                            
-                            // The starting x position for the parent block to be centered over the child's pfp
-                            const parentBlockX = childPfpCenter - parentWidth / 2;
+                            const parentBlockX = (childPos.x + pfpSize / 2) - selfWidth / 2;
                             userPositions.set(userId, { x: parentBlockX, y });
 
-                            // Position any spouses relative to the main parent
                             let spouseX = parentBlockX;
                             for (const spouseId of node.spouses) {
                                 spouseX += pfpSize + gap;
-                                userPositions.set(spouseId, { x: spouseX, y: y });
+                                userPositions.set(spouseId, { x: spouseX, y });
                             }
-
                             finalHeight = Math.max(finalHeight, y + pfpSize + 25 + gap);
-                            
+
                         } else {
-                            // Existing logic for multiple children
                             const parentBlockStartX = x + (totalSubtreeWidth - selfWidth) / 2;
                             let spouseX = parentBlockStartX;
-                            userPositions.set(userId, { x: spouseX, y: y });
+                            userPositions.set(userId, { x: spouseX, y });
                             finalHeight = Math.max(finalHeight, y + pfpSize + 25 + gap);
 
                             for (const spouseId of node.spouses) {
                                 spouseX += pfpSize + gap;
-                                userPositions.set(spouseId, { x: spouseX, y: y });
+                                userPositions.set(spouseId, { x: spouseX, y });
                             }
-                            
+
                             let currentChildX = x + (totalSubtreeWidth - childrenTotalWidth) / 2;
-                            for (let i = 0; i < node.children.length; i++) {
-                                const childId = node.children[i];
+                            for (let i = 0; i < mergedChildren.length; i++) {
+                                const childId = mergedChildren[i];
                                 const childWidth = childrenWidths[i];
                                 positionSubtree(childId, y + pfpSize + gap * 3, currentChildX);
                                 currentChildX += childWidth + gap;
                             }
                         }
-                        
+
                         finalWidth = Math.max(finalWidth, x + totalSubtreeWidth);
                         return x + totalSubtreeWidth + gap;
                     };
 
-
-                    // A helper function to draw a single user, to keep the main logic clean
+                    // --- Draw User ---
                     const drawUser = async (context, member, pos) => {
                         try {
                             const pfp = await loadImage(member.displayAvatarURL({ extension: 'png' }));
@@ -1289,41 +1287,47 @@ module.exports = {
                         context.fillText(sanitizeText(member.displayName), pos.x + pfpSize / 2, pos.y + pfpSize + 25);
                     };
 
-                    // Main drawing function
+                    // --- Draw Tree ---
                     const drawTree = async (context, guild) => {
-                        // Draw connections first
                         context.lineWidth = 3;
                         for (const [userId, node] of familyTree.entries()) {
                             const userPos = userPositions.get(userId);
                             if (!userPos) continue;
 
-                            // Draw marriage lines
+                            // Marriage lines
                             const spouses = node.spouses || [];
-                            context.strokeStyle = '#FF69B4'; // Pink
+                            context.strokeStyle = '#FF69B4';
                             for (const spouseId of spouses) {
                                 const spousePos = userPositions.get(spouseId);
-                                // Draw the marriage line only once
-                                if (userPos.x < spousePos.x) {
+                                if (spousePos && userPos.x < spousePos.x) {
                                     context.beginPath();
                                     context.moveTo(userPos.x + pfpSize, userPos.y + pfpSize / 2);
                                     context.lineTo(spousePos.x, spousePos.y + pfpSize / 2);
                                     context.stroke();
                                 }
                             }
-                            
-                            // Draw lines to children
-                            const children = node.children || [];
-                            context.strokeStyle = '#90EE90'; // Green
-                            if (children.length > 0) {
+
+                            // Merge children from both parents
+                            const allChildren = new Set(node.children || []);
+                            for (const spouseId of spouses) {
+                                const spouseNode = familyTree.get(spouseId);
+                                if (spouseNode && spouseNode.children) {
+                                    spouseNode.children.forEach(c => allChildren.add(c));
+                                }
+                            }
+                            const mergedChildren = Array.from(allChildren);
+
+                            // Child lines
+                            context.strokeStyle = '#90EE90';
+                            if (mergedChildren.length > 0) {
                                 const parentXCenter = spouses.length > 0
                                     ? (userPos.x + userPositions.get(spouses[0]).x) / 2 + pfpSize / 2
                                     : userPos.x + pfpSize / 2;
-                                
+
                                 const parentYBottom = userPos.y + pfpSize;
 
-                                if (children.length === 1) {
-                                    // New logic: Draw a direct vertical line for a single child
-                                    const childId = children[0];
+                                if (mergedChildren.length === 1) {
+                                    const childId = mergedChildren[0];
                                     const childPos = userPositions.get(childId);
                                     if (childPos) {
                                         const childXCenter = childPos.x + pfpSize / 2;
@@ -1333,29 +1337,25 @@ module.exports = {
                                         context.stroke();
                                     }
                                 } else {
-                                    // Existing logic for multiple children
                                     const horizontalLineY = parentYBottom + gap;
+                                    const firstChildPos = userPositions.get(mergedChildren[0]);
+                                    const lastChildPos = userPositions.get(mergedChildren[mergedChildren.length - 1]);
 
-                                    const firstChildPos = userPositions.get(children[0]);
-                                    const lastChildPos = userPositions.get(children[children.length - 1]);
                                     if (firstChildPos && lastChildPos) {
                                         const firstChildXCenter = firstChildPos.x + pfpSize / 2;
                                         const lastChildXCenter = lastChildPos.x + pfpSize / 2;
 
-                                        // Draw the vertical line from parent(s) to the horizontal line
                                         context.beginPath();
                                         context.moveTo(parentXCenter, parentYBottom);
                                         context.lineTo(parentXCenter, horizontalLineY);
                                         context.stroke();
-                                        
-                                        // Draw the horizontal line connecting the children's vertical lines
+
                                         context.beginPath();
                                         context.moveTo(firstChildXCenter, horizontalLineY);
                                         context.lineTo(lastChildXCenter, horizontalLineY);
                                         context.stroke();
 
-                                        // Draw vertical lines from the horizontal line to each child
-                                        for (const childId of children) {
+                                        for (const childId of mergedChildren) {
                                             const childPos = userPositions.get(childId);
                                             if (childPos) {
                                                 const childXCenter = childPos.x + pfpSize / 2;
@@ -1369,8 +1369,8 @@ module.exports = {
                                 }
                             }
                         }
-                        
-                        // Draw users and their names on top of lines
+
+                        // Draw users
                         for (const [userId, pos] of userPositions.entries()) {
                             const member = guild.members.cache.get(userId);
                             if (!member) continue;
@@ -1378,42 +1378,36 @@ module.exports = {
                         }
                     };
 
-
-                    // Start layout calculation
+                    // --- Run Layout + Render ---
                     const rootMember = guild.members.cache.get(rootUserId);
                     if (rootMember) {
-                        // Run the two passes
                         calculateSubtreeWidth(rootUserId);
                         positionSubtree(rootUserId, 50, 50);
 
-                        // Create the final canvas with the correct size
                         const finalCanvas = createCanvas(finalWidth + 100, finalHeight + 50);
                         const finalContext = finalCanvas.getContext('2d');
                         finalContext.fillStyle = '#2f3136';
                         finalContext.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
-                        
-                        // Draw the tree on the new canvas
+
                         await drawTree(finalContext, guild);
-                        
+
                         const buffer = finalCanvas.toBuffer('image/png');
                         const attachment = new AttachmentBuilder(buffer, { name: 'family-tree.png' });
-                        
+
                         const familyTreeEmbed = new EmbedBuilder()
                             .setTitle(`***👨‍👩‍👧‍👦 ${sanitizeText(rootMember.displayName)}'s Family Tree 👨‍👩‍👧‍👦***`)
                             .setImage('attachment://family-tree.png')
                             .setColor('#4890ff')
                             .setTimestamp();
-                        
+
                         await interaction.editReply({ embeds: [familyTreeEmbed], files: [attachment] });
 
                     } else {
                         return interaction.editReply({ content: 'Could not find the family root for that user.' });
                     }
-                    
+
                     break;
                 }
-
-
             // Admin-only force commands
             case 'force-marry':
                 {
