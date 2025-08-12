@@ -435,7 +435,7 @@ client.on('guildMemberRemove', async member => {
         const kickedLog = auditLogs.entries.first();
         if (kickedLog && kickedLog.target.id === member.id) {
             const { executor, reason } = kickedLog;
-            farewellChannel.send(`${member.displayName} was kicked from the server! Goodbye and good riddance!🍻`);
+            farewellChannel.send(`**${member.displayName}** was kicked from the server! Goodbye and good riddance!🍻`);
             if (!loggingChannel) return;
             const kickEmbed = new EmbedBuilder()
                 .setTitle('Member Kicked')
@@ -448,7 +448,7 @@ client.on('guildMemberRemove', async member => {
                 .setTimestamp();
             loggingChannel.send({ embeds: [kickEmbed] });
         } else {
-            farewellChannel.send(`Goodbye ${member.displayName}! We hope you had a good time in our server!👋`);
+            farewellChannel.send(`Goodbye **${member.displayName}**! We hope you had a good time in our server!👋`);
             if (!loggingChannel) return;
             const leaveLoggingEmbed = new EmbedBuilder()
                 .setTitle(`Member Left`)
@@ -463,7 +463,7 @@ client.on('guildMemberRemove', async member => {
         }
     } catch (error) {
         if (!loggingChannel) return;
-        farewellChannel.send(`Goodbye ${member.displayName}! We hope you had a good time in our server!👋`);
+        farewellChannel.send(`Goodbye **${member.displayName}**! We hope you had a good time in our server!👋`);
         const leaveLoggingEmbed = new EmbedBuilder()
             .setTitle(`Member Left`)
             .setThumbnail(member.user.displayAvatarURL({ extension: 'png', size: 1024 }))
