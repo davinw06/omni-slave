@@ -107,15 +107,18 @@ module.exports = {
             const canvas = createCanvas(512, 512);
             const context = canvas.getContext('2d');
 
-            context.beginPath();
-            context.arc(256, 256, 256, 0, Math.PI * 2, true); // center (256,256), radius 256
-            context.closePath();
-            context.clip();
+            const avCanvas = createCanvas(256, 256);
+            const avContext = canvas.getContext('2d');
+
+            avContext.beginPath();
+            avContext.arc(256, 256, 256, 0, Math.PI * 2, true); // center (256,256), radius 256
+            avContext.closePath();
+            avContext.clip();
 
             const av = await loadImage(avatar);
-            context.drawImage(av, 0, 0, 512, 512);
+            avContext.drawImage(av, 0, 0, 256, 256);
 
-            context.restore();
+            context.drawImage(avContext, 0, 0, 256, 256);
 
             const decor = await loadImage(decoration);
             context.drawImage(decor, 0, 0, 512, 512);
