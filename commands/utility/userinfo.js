@@ -105,7 +105,7 @@ module.exports = {
         const canvasSize = 512;
         const avCanvasSize = 456;
         const avPosition = (canvasSize - avCanvasSize)/2;
-        const avCtxArc = 200;
+        const avCtxArc = avCanvasSize/2;
 
         if (decoration) {
             const canvas = createCanvas(canvasSize, canvasSize);
