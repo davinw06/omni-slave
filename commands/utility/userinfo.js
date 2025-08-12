@@ -101,6 +101,7 @@ module.exports = {
         const decoration = targetUser.avatarDecorationURL({ extension: 'png', size: 512 });
 
         let userAvatar = avatar;
+        let attachments = [];
 
         if(decoration) {
             const canvas = createCanvas(512, 512);
