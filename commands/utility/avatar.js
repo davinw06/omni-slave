@@ -19,8 +19,8 @@ module.exports = {
         let user = interaction.options.getUser('user');
         if (!user) user = interaction.user;
 
-        const decorBoolean = interaction.options.getBoolean('decoration');
-        if(!decorBoolean) decorBoolean = false;
+        let decorBoolean = interaction.options.getBoolean('decoration');
+        if(decorBoolean === null) decorBoolean = false;
 
         const avatar = user.displayAvatarURL({ extension: 'png', size: 1024 });
         const authorAvatarURL = interaction.user.displayAvatarURL({ extension: 'png', size: 1024 });
@@ -47,7 +47,7 @@ module.exports = {
                 avContext.clip();
 
                 const av = await loadImage(avatar);
-                avContext.drawImage(av, 0, 0, avCanvas, avCanvas);
+                avContext.drawImage(av, 0, 0, avCanvasSize, avCanvasSize);
 
                 context.drawImage(avCanvas, avPosition, avPosition, avCanvasSize, avCanvasSize);
 
