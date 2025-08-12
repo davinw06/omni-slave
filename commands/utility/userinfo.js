@@ -108,7 +108,7 @@ module.exports = {
             const context = canvas.getContext('2d');
 
             const avCanvas = createCanvas(400, 400);
-            const avContext = canvas.getContext('2d');
+            const avContext = avCanvas.getContext('2d');
 
             avContext.beginPath();
             avContext.arc(200, 200, 200, 0, Math.PI * 2, true); // center (256,256), radius 256
@@ -121,7 +121,7 @@ module.exports = {
             context.drawImage(avCanvas, 56, 56, 400, 400);
 
             const decor = await loadImage(decoration);
-            context.drawImage(decor, -10, 0, 512, 512);
+            context.drawImage(decor, 0, 0, 512, 512);
 
             const buffer = canvas.toBuffer();
             const attachment = new AttachmentBuilder(buffer, {name: 'profile.png'});
