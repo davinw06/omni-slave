@@ -112,7 +112,8 @@ module.exports = {
             const decor = await loadImage(decoration);
             context.drawImage(decor, 0, 0, 512, 512);
 
-            const attachment = new AttachmentBuilder(canvas.toBuffer(), {name: 'profile.png'});
+            const buffer = canvas.toBuffer();
+            const attachment = new AttachmentBuilder(buffer, {name: 'profile.png'});
 
             userAvatar = 'attachment://profile.png';
         }
