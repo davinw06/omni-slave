@@ -1,4 +1,4 @@
-const { REST, Routes, Client, IntentsBitField, Collection, Events, SlashCommandBuilder, ClientApplication, MessageFlags, AttachmentBuilder, PermissionsBitField, GatewayIntentBits, Message, userMention, MessageEmbed, ActivityType, Partials, Guild, EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, InteractionType } = require('discord.js');
+const { REST, Routes, Client, IntentsBitField, Collection, Events, SlashCommandBuilder, ClientApplication, MessageFlags, AttachmentBuilder, PermissionsBitField, GatewayIntentBits, Message, userMention, MessageEmbed, ActivityType, Partials, Guild, EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, InteractionType, AuditLogEvent } = require('discord.js');
 require('dotenv').config();
 const clientId = process.env.CLIENT_ID;
 const guildId = process.env.GUILD_ID;
@@ -65,16 +65,10 @@ const userSchema = require('./Schemas.js/userSchema');
 const WELCOME_CHANNEL_ID = '1379585527992291348';
 const GENERAL_CHANNEL_ID = '1379562445248659538';
 const INTRODUCTION_CHANNEL_ID = '1379680357082988554';
-const POKETWO_CHANNEL_ID = '1380691826348003500';
-const GEOJOURNEY_CHANNEL_ID = '1381395009797881887';
-const UNO_CHANNEL_ID = '1381484175839723522';
-const WORDLE_CHANNEL_ID = '1381691501683413133';
-const TICTACTOE_CHANNEL_ID = '1381848177975623731';
+const REACTION_ROLES_CHANNEL_ID = '1379585673446817852';
+const CHAT_CLIPS_CHANNEL_ID = '1381885335675469955';
 const FAREWELL_CHANNEL_ID = '1380682881994723428';
 const LOGGING_CHANNEL_ID = '1381905624522031114';
-const DISBOARD_BUMP_CHANNEL_ID = '1382635651991736372';
-const BUMP_ALERT_ROLE_ID = '1395467455593451572';
-const BUMP_ALERT_INTERVAL_MINUTES = 120;
 
 const client = new Client({
     intents: [
@@ -405,6 +399,49 @@ client.on(Events.InteractionCreate, async interaction => {
             }
         }
     }
+});
+
+client.on('guildMemberAdd', async member => {
+    const channel = WELCOME_CHANNEL_ID;
+
+    if(!channel) {
+        console.log('Welcome Channel does not exist!')
+    };
+
+    let welcomeEmbed = new EmbedBuilder()
+        .setImage('https://i.imgur.com/KQxfKhA_d.png?maxwidth=520&shape=thumb&fidelity=high');
+    
+    channel.send({ embeds: [welcomeEmbed], content: `Welcome <@${member.id}> to **${member.guild.name}**, 
+        we hope you enjoy your stay! Go to ${GENERAL_CHANNEL_ID} to chat with others or ${INTRODUCTION_CHANNEL_ID} to introduce yourself to everyone. 
+        Read up on ${CHAT_CLIPS_CHANNEL_ID} to learn more about our server. Check out ${REACTION_ROLES_CHANNEL_ID} to change your colors or change your roles.` 
+    })
+});
+
+client.on('guildMemberRemove', async member => {
+    const channel = FAREWELL_CHANNEL_ID;
+
+    if(!channel) {
+        console.log('Departure Channel does not exist!');
+    }
+
+    try {
+        const auditLogs = await member.guild.fetchAuditLogs({
+            limit: 1,
+            type: AuditLogEvent.MemberKick,
+        });
+
+        const kickedLog = auditLogs.entries.first();
+
+        if(kickedLog && kickedLog.target.id === member.id) {
+            channel.send(`${member.displayName} was kicked from the server! Goodbye and good riddance!🍻`);
+        } else {
+            channel.send(`Goodbye ${member.displayName}! We hope you had a good time in our server!👋`);
+        }
+    } catch(error) {
+        console.log('An error has occured in sending departure message for kicked member!', error);
+        channel.send(`Goodbye ${member.displayName}! We hope you had a good time in our server!👋`);
+    }
+
 });
 
 
