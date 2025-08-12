@@ -73,6 +73,21 @@ module.exports = {
                     console.error('Error replying to interaction:', error);
                     await interaction.followUp({ content: 'There was an error trying to fetch the avatar.', flags: MessageFlags.Ephemeral });
                 }
+            } else {
+                userAvatar = avatar;
+
+                const embed = new EmbedBuilder()
+                    .setColor('#C70039')
+                    .setTitle(`**${user.displayName}'s** Avatar`)
+                    .setImage(userAvatar)
+                    .setFooter({ text: `Requested by ${interaction.user.displayName}`, iconURL: authorAvatarURL })
+                    .setTimestamp();
+                try {
+                    await interaction.reply({ embeds: [embed] });
+                } catch (error) {
+                    console.error('Error replying to interaction:', error);
+                    await interaction.followUp({ content: 'There was an error trying to fetch the avatar.', flags: MessageFlags.Ephemeral });
+                }
             }
         } else {
             userAvatar = avatar;
