@@ -14,13 +14,12 @@ module.exports = {
     async execute(interaction) {
         const initiator = interaction.user;
         const victim = interaction.options.get('user');
+        if(!victim) victim = interaction.user;
         let initiatorAvatar = initiator.displayAvatarURL({ extension: 'png', size: 1024 });
         let victimAvatar = victim.displayAvatarURL({ extension: 'png', size: 1024 });
 
         const underage_RoleID = '1379700883398332497';
         const mod_RoleID = '1380459360207114341';
-
-        if(!victim) victim = interaction.user;
 
         let description = `<@${initiator.id}> has just started pegging <@${user.id}>!! Give them what they deserve!😈`;
         let peggingGif = 'https://c.tenor.com/26RCNR49i7cAAAAC/tenor.gif';
