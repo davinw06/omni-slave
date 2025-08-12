@@ -24,7 +24,7 @@ module.exports = {
 
         const avatar = user.displayAvatarURL({ extension: 'png', size: 512 });
         const authorAvatarURL = interaction.user.displayAvatarURL({ extension: 'png', size: 1024 });
-        const decoration = user.avatarDecorationURL ? targetUser.avatarDecorationURL({ extension: 'png', size: 512 }) : null ;
+        const decoration = user.avatarDecorationURL ? user.avatarDecorationURL({ extension: 'png', size: 512 }) : null ;
 
         let userAvatar = avatar;
         let attachments = [];
