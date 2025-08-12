@@ -68,11 +68,28 @@ module.exports = {
         .addSubcommand(subcommand =>
             subcommand
                 .setName('divorce')
-                .setDescription('Divorce your current partner. 🥀�')
+                .setDescription('Divorce your spouse')
+                .addStringOption(option =>
+                    option.setName('custody')
+                        .setDescription('Do you want custody of all adopted children?')
+                        .addChoices(
+                            { name: 'Yes', value: 'yes' },
+                            { name: 'No', value: 'no' }
+                        )
+                        .setRequired(false)
+                )
+        )
+        // Marriage certificate command
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('marriage-certificate')
+                .setDescription('View your marriage certificate or someone else\'s.')
                 .addUserOption(option =>
-                    option.setName('target')
-                        .setDescription('The partner you want to divorce.')
-                        .setRequired(true)))
+                    option.setName('user')
+                        .setDescription('The user to view the marriage certificate for.')
+                        .setRequired(false)
+                )
+        )
         // Divorceall subcommand: Allows a user to divorce all partners
         .addSubcommand(subcommand =>
             subcommand
@@ -272,6 +289,7 @@ module.exports = {
 
         // Handle different subcommands
         switch (subcommand) {
+
             case 'propose':
                 {
                     // Check for existing pending proposals between the two users
@@ -430,64 +448,68 @@ module.exports = {
                     break;
                 }
 
-            case 'divorce':
-                {
-                    // Find the marriage relationship
-                    const marriage = await Relationship.findOne({
-                        type: 'marriage',
-                        status: 'accepted',
-                        $or: [
-                            { initiatorId: initiator.id, targetId: target.id },
-                            { initiatorId: target.id, targetId: initiator.id }
-                        ]
+            case 'divorce': {
+                const custody = interaction.options.getString('custody') || 'no';
+
+                // Existing divorce logic...
+                const marriage = await Relationship.findOne({
+                    type: 'marriage',
+                    status: 'accepted',
+                    $or: [
+                        { initiatorId: interaction.user.id },
+                        { targetId: interaction.user.id }
+                    ]
+                });
+
+                if (!marriage) {
+                    return interaction.reply({
+                        content: 'You are not married.',
+                        ephemeral: true
+                    });
+                }
+
+                // Handle custody request
+                if (custody === 'yes') {
+                    await interaction.followUp({
+                        content: 'You have requested custody of all adopted children. A coin will now be flipped...'
                     });
 
-                    if (!marriage) {
-                        return interaction.reply({ content: `**🚫 You are not married to ${target.displayName}.**` });
-                    }
+                    const coinResult = Math.random() < 0.5 ? 'heads' : 'tails';
+                    const coinEmbed = new EmbedBuilder()
+                        .setTitle('Custody Battle Coin Flip')
+                        .setDescription(`The coin landed on **${coinResult.toUpperCase()}**!`)
+                        .setColor('#ffaa00');
 
-                    // Update the marriage status to 'divorced'
-                    marriage.status = 'divorced';
-                    await marriage.save();
                     
-                    // Create a new canvas to draw the image for divorce
-                    const canvas = createCanvas(600, 200);
-                    const context = canvas.getContext('2d');
-                    
-                    // Set background color
-                    context.fillStyle = '#2f3136';
-                    context.fillRect(0, 0, canvas.width, canvas.height);
-                    
-                    // Load images concurrently
-                    const [initiatorPFP, targetPFP, brokenHeart] = await Promise.all([
-                        loadImage(initiator.user.displayAvatarURL({ dynamic: false, extension: 'png' })),
-                        loadImage(target.user.displayAvatarURL({ dynamic: false, extension: 'png' })),
-                        loadImage('https://images.emojiterra.com/google/noto-emoji/unicode-15/color/512px/1f494.png') // Broken heart emoji
-                    ]);
-                    
-                    // Draw the avatars
-                    context.drawImage(initiatorPFP, 50, 25, 150, 150);
-                    context.drawImage(targetPFP, 400, 25, 150, 150);
-                    
-                    // Draw the broken heart in the middle, centered and as a square
-                    context.drawImage(brokenHeart, 250, 50, 100, 100);
-                    
-                    // Create a buffer from the canvas
-                    const buffer = canvas.toBuffer('image/png');
-                    
-                    // Create the attachment and embed
-                    const attachment = new AttachmentBuilder(buffer, { name: 'divorce-notice.png' });
-                    
-                    const divorceEmbed = new EmbedBuilder()
-                        .setColor('#ff0a00')
-                        .setTitle(`***💔 Divorce is Finalized 💔***`)
-                        .setDescription(`*${initiator.displayName} and ${target.displayName} are no longer married.*`)
-                        .setImage('attachment://divorce-notice.png')
-                        .setTimestamp();
-                    
-                    await interaction.reply({ embeds: [divorceEmbed], files: [attachment] });
-                    break;
+
+                    if (coinResult === 'heads') {
+                        coinEmbed.setImage('https://i.imgur.com/JAX1NFD.png');
+                        await interaction.followUp({ embeds: [coinEmbed] });
+                        await interaction.followUp({
+                            content: 'Congrats! 🎉 You won the custody battle, the kids are now yours.'
+                        });
+                        // Transfer children & descendants here
+                        await transferCustody(interaction.user.id, marriage);
+                    } else {
+                        coinEmbed.setImage('https://i.imgur.com/zKBB2A9.png');
+                        await interaction.followUp({ embeds: [coinEmbed] });
+                        await interaction.followUp({
+                            content: 'Oooooh... 😢 You lost the custody battle... The other spouse gets the children.'
+                        });
+                        const otherSpouseId = marriage.initiatorId === interaction.user.id ? marriage.targetId : marriage.initiatorId;
+                        await transferCustody(otherSpouseId, marriage);
+                    }
                 }
+
+                // Mark marriage as divorced
+                marriage.status = 'divorced';
+                await marriage.save();
+
+                return interaction.reply({
+                    content: `💔 Divorce finalized between you and <@${marriage.initiatorId === interaction.user.id ? marriage.targetId : marriage.initiatorId}>.`
+                });
+            }
+
 
             case 'divorceall':
                 {
@@ -1088,308 +1110,308 @@ module.exports = {
                 }
 
             case 'familytree': {
-    await interaction.deferReply();
-    const targetUser = interaction.options.getUser('user') || interaction.user;
-    const guild = interaction.guild;
+                    await interaction.deferReply();
+                    const targetUser = interaction.options.getUser('user') || interaction.user;
+                    const guild = interaction.guild;
 
-    // A helper function to sanitize usernames for drawing on the canvas.
-    const sanitizeText = (text) => {
-        return text.replace(/[^a-zA-Z0-9 ]/g, '');
-    };
+                    // A helper function to sanitize usernames for drawing on the canvas.
+                    const sanitizeText = (text) => {
+                        return text.replace(/[^a-zA-Z0-9 ]/g, '');
+                    };
 
-    // --- Finding the Family Root ---
-    let rootUserId = targetUser.id;
-    let currentUserId = targetUser.id;
-    let hasParents = true;
+                    // --- Finding the Family Root ---
+                    let rootUserId = targetUser.id;
+                    let currentUserId = targetUser.id;
+                    let hasParents = true;
 
-    while (hasParents) {
-        const parentRelationship = await Relationship.findOne({
-            type: 'adoption',
-            status: 'accepted',
-            targetId: currentUserId
-        });
+                    while (hasParents) {
+                        const parentRelationship = await Relationship.findOne({
+                            type: 'adoption',
+                            status: 'accepted',
+                            targetId: currentUserId
+                        });
 
-        if (parentRelationship) {
-            currentUserId = parentRelationship.initiatorId;
-            rootUserId = currentUserId;
-        } else {
-            hasParents = false;
-        }
-    }
-
-    // --- Building the Family Tree Structure from the Root ---
-    const familyTree = new Map();
-    const queue = [rootUserId];
-    const visited = new Set();
-
-    while (queue.length > 0) {
-        const userId = queue.shift();
-        if (visited.has(userId)) continue;
-        visited.add(userId);
-
-        const userRelationships = await Relationship.find({
-            $or: [
-                { initiatorId: userId },
-                { targetId: userId }
-            ],
-            status: 'accepted'
-        });
-
-        const childrenIds = new Set();
-        const spouseIds = new Set();
-        const parentIds = new Set();
-
-        for (const rel of userRelationships) {
-            if (rel.type === 'adoption') {
-                if (rel.initiatorId === userId) {
-                    childrenIds.add(rel.targetId);
-                    if (!visited.has(rel.targetId)) queue.push(rel.targetId);
-                } else if (rel.targetId === userId) {
-                    parentIds.add(rel.initiatorId);
-                    if (!visited.has(rel.initiatorId)) queue.push(rel.initiatorId);
-                }
-            } else if (rel.type === 'marriage') {
-                const spouseId = rel.initiatorId === userId ? rel.targetId : rel.initiatorId;
-                spouseIds.add(spouseId);
-                if (!visited.has(spouseId)) queue.push(spouseId);
-            }
-        }
-
-        familyTree.set(userId, {
-            children: Array.from(childrenIds),
-            spouses: Array.from(spouseIds),
-            parents: Array.from(parentIds)
-        });
-    }
-
-    // --- Canvas Drawing Logic (Revised with Two-Pass Layout) ---
-    const pfpSize = 80;
-    const gap = 40;
-    const userPositions = new Map();
-    let finalWidth = 0;
-    let finalHeight = 0;
-
-    // Pass 1: Calculate the width of each subtree.
-    const calculateSubtreeWidth = (userId) => {
-        const node = familyTree.get(userId);
-        if (!node) return pfpSize;
-
-        const childrenWidths = node.children.map(childId => calculateSubtreeWidth(childId));
-        let childrenTotalWidth = childrenWidths.reduce((sum, width) => sum + width + gap, 0);
-        childrenTotalWidth = Math.max(0, childrenTotalWidth - gap);
-
-        const selfWidth = (node.spouses.length + 1) * (pfpSize + gap) - gap;
-        return Math.max(selfWidth, childrenTotalWidth);
-    };
-
-    // Pass 2: Position the elements based on the calculated widths.
-    const positionSubtree = (userId, y, x) => {
-        const node = familyTree.get(userId);
-        if (!node) {
-            userPositions.set(userId, { x, y });
-            finalHeight = Math.max(finalHeight, y + pfpSize + 25 + gap);
-            finalWidth = Math.max(finalWidth, x + pfpSize);
-            return x + pfpSize + gap;
-        }
-
-        const selfWidth = (node.spouses.length + 1) * (pfpSize + gap) - gap;
-        const childrenWidths = node.children.map(childId => calculateSubtreeWidth(childId));
-        const childrenTotalWidth = childrenWidths.reduce((sum, width) => sum + width + gap, 0) - gap;
-        const totalSubtreeWidth = Math.max(selfWidth, childrenTotalWidth);
-
-        // Position children first to determine parent's position
-        if (node.children.length === 1) {
-            // New logic: For a single child, position the child first...
-            const childId = node.children[0];
-            const childWidth = calculateSubtreeWidth(childId);
-            
-            // Position the child's subtree
-            positionSubtree(childId, y + pfpSize + gap * 3, x);
-            const childPos = userPositions.get(childId);
-
-            // ...then center the parent directly above them.
-            const parentWidth = (node.spouses.length + 1) * (pfpSize + gap) - gap;
-            
-            // The center of the child's profile picture
-            const childPfpCenter = childPos.x + pfpSize / 2;
-            
-            // The starting x position for the parent block to be centered over the child's pfp
-            const parentBlockX = childPfpCenter - parentWidth / 2;
-            userPositions.set(userId, { x: parentBlockX, y });
-
-            // Position any spouses relative to the main parent
-            let spouseX = parentBlockX;
-            for (const spouseId of node.spouses) {
-                spouseX += pfpSize + gap;
-                userPositions.set(spouseId, { x: spouseX, y: y });
-            }
-
-            finalHeight = Math.max(finalHeight, y + pfpSize + 25 + gap);
-            
-        } else {
-            // Existing logic for multiple children
-            const parentBlockStartX = x + (totalSubtreeWidth - selfWidth) / 2;
-            let spouseX = parentBlockStartX;
-            userPositions.set(userId, { x: spouseX, y: y });
-            finalHeight = Math.max(finalHeight, y + pfpSize + 25 + gap);
-
-            for (const spouseId of node.spouses) {
-                spouseX += pfpSize + gap;
-                userPositions.set(spouseId, { x: spouseX, y: y });
-            }
-            
-            let currentChildX = x + (totalSubtreeWidth - childrenTotalWidth) / 2;
-            for (let i = 0; i < node.children.length; i++) {
-                const childId = node.children[i];
-                const childWidth = childrenWidths[i];
-                positionSubtree(childId, y + pfpSize + gap * 3, currentChildX);
-                currentChildX += childWidth + gap;
-            }
-        }
-        
-        finalWidth = Math.max(finalWidth, x + totalSubtreeWidth);
-        return x + totalSubtreeWidth + gap;
-    };
-
-
-    // A helper function to draw a single user, to keep the main logic clean
-    const drawUser = async (context, member, pos) => {
-        try {
-            const pfp = await loadImage(member.displayAvatarURL({ extension: 'png' }));
-            context.drawImage(pfp, pos.x, pos.y, pfpSize, pfpSize);
-        } catch (error) {
-            console.error(`Failed to load avatar for user ${member.id}:`, error);
-        }
-
-        context.fillStyle = '#FFFFFF';
-        context.font = '24px sans-serif';
-        context.textAlign = 'center';
-        context.fillText(sanitizeText(member.displayName), pos.x + pfpSize / 2, pos.y + pfpSize + 25);
-    };
-
-    // Main drawing function
-    const drawTree = async (context, guild) => {
-        // Draw connections first
-        context.lineWidth = 3;
-        for (const [userId, node] of familyTree.entries()) {
-            const userPos = userPositions.get(userId);
-            if (!userPos) continue;
-
-            // Draw marriage lines
-            const spouses = node.spouses || [];
-            context.strokeStyle = '#FF69B4'; // Pink
-            for (const spouseId of spouses) {
-                const spousePos = userPositions.get(spouseId);
-                // Draw the marriage line only once
-                if (userPos.x < spousePos.x) {
-                    context.beginPath();
-                    context.moveTo(userPos.x + pfpSize, userPos.y + pfpSize / 2);
-                    context.lineTo(spousePos.x, spousePos.y + pfpSize / 2);
-                    context.stroke();
-                }
-            }
-            
-            // Draw lines to children
-            const children = node.children || [];
-            context.strokeStyle = '#90EE90'; // Green
-            if (children.length > 0) {
-                const parentXCenter = spouses.length > 0
-                    ? (userPos.x + userPositions.get(spouses[0]).x) / 2 + pfpSize / 2
-                    : userPos.x + pfpSize / 2;
-                
-                const parentYBottom = userPos.y + pfpSize;
-
-                if (children.length === 1) {
-                    // New logic: Draw a direct vertical line for a single child
-                    const childId = children[0];
-                    const childPos = userPositions.get(childId);
-                    if (childPos) {
-                        const childXCenter = childPos.x + pfpSize / 2;
-                        context.beginPath();
-                        context.moveTo(parentXCenter, parentYBottom);
-                        context.lineTo(childXCenter, childPos.y);
-                        context.stroke();
-                    }
-                } else {
-                    // Existing logic for multiple children
-                    const horizontalLineY = parentYBottom + gap;
-
-                    const firstChildPos = userPositions.get(children[0]);
-                    const lastChildPos = userPositions.get(children[children.length - 1]);
-                    if (firstChildPos && lastChildPos) {
-                        const firstChildXCenter = firstChildPos.x + pfpSize / 2;
-                        const lastChildXCenter = lastChildPos.x + pfpSize / 2;
-
-                        // Draw the vertical line from parent(s) to the horizontal line
-                        context.beginPath();
-                        context.moveTo(parentXCenter, parentYBottom);
-                        context.lineTo(parentXCenter, horizontalLineY);
-                        context.stroke();
-                        
-                        // Draw the horizontal line connecting the children's vertical lines
-                        context.beginPath();
-                        context.moveTo(firstChildXCenter, horizontalLineY);
-                        context.lineTo(lastChildXCenter, horizontalLineY);
-                        context.stroke();
-
-                        // Draw vertical lines from the horizontal line to each child
-                        for (const childId of children) {
-                            const childPos = userPositions.get(childId);
-                            if (childPos) {
-                                const childXCenter = childPos.x + pfpSize / 2;
-                                context.beginPath();
-                                context.moveTo(childXCenter, horizontalLineY);
-                                context.lineTo(childXCenter, childPos.y);
-                                context.stroke();
-                            }
+                        if (parentRelationship) {
+                            currentUserId = parentRelationship.initiatorId;
+                            rootUserId = currentUserId;
+                        } else {
+                            hasParents = false;
                         }
                     }
+
+                    // --- Building the Family Tree Structure from the Root ---
+                    const familyTree = new Map();
+                    const queue = [rootUserId];
+                    const visited = new Set();
+
+                    while (queue.length > 0) {
+                        const userId = queue.shift();
+                        if (visited.has(userId)) continue;
+                        visited.add(userId);
+
+                        const userRelationships = await Relationship.find({
+                            $or: [
+                                { initiatorId: userId },
+                                { targetId: userId }
+                            ],
+                            status: 'accepted'
+                        });
+
+                        const childrenIds = new Set();
+                        const spouseIds = new Set();
+                        const parentIds = new Set();
+
+                        for (const rel of userRelationships) {
+                            if (rel.type === 'adoption') {
+                                if (rel.initiatorId === userId) {
+                                    childrenIds.add(rel.targetId);
+                                    if (!visited.has(rel.targetId)) queue.push(rel.targetId);
+                                } else if (rel.targetId === userId) {
+                                    parentIds.add(rel.initiatorId);
+                                    if (!visited.has(rel.initiatorId)) queue.push(rel.initiatorId);
+                                }
+                            } else if (rel.type === 'marriage') {
+                                const spouseId = rel.initiatorId === userId ? rel.targetId : rel.initiatorId;
+                                spouseIds.add(spouseId);
+                                if (!visited.has(spouseId)) queue.push(spouseId);
+                            }
+                        }
+
+                        familyTree.set(userId, {
+                            children: Array.from(childrenIds),
+                            spouses: Array.from(spouseIds),
+                            parents: Array.from(parentIds)
+                        });
+                    }
+
+                    // --- Canvas Drawing Logic (Revised with Two-Pass Layout) ---
+                    const pfpSize = 80;
+                    const gap = 40;
+                    const userPositions = new Map();
+                    let finalWidth = 0;
+                    let finalHeight = 0;
+
+                    // Pass 1: Calculate the width of each subtree.
+                    const calculateSubtreeWidth = (userId) => {
+                        const node = familyTree.get(userId);
+                        if (!node) return pfpSize;
+
+                        const childrenWidths = node.children.map(childId => calculateSubtreeWidth(childId));
+                        let childrenTotalWidth = childrenWidths.reduce((sum, width) => sum + width + gap, 0);
+                        childrenTotalWidth = Math.max(0, childrenTotalWidth - gap);
+
+                        const selfWidth = (node.spouses.length + 1) * (pfpSize + gap) - gap;
+                        return Math.max(selfWidth, childrenTotalWidth);
+                    };
+
+                    // Pass 2: Position the elements based on the calculated widths.
+                    const positionSubtree = (userId, y, x) => {
+                        const node = familyTree.get(userId);
+                        if (!node) {
+                            userPositions.set(userId, { x, y });
+                            finalHeight = Math.max(finalHeight, y + pfpSize + 25 + gap);
+                            finalWidth = Math.max(finalWidth, x + pfpSize);
+                            return x + pfpSize + gap;
+                        }
+
+                        const selfWidth = (node.spouses.length + 1) * (pfpSize + gap) - gap;
+                        const childrenWidths = node.children.map(childId => calculateSubtreeWidth(childId));
+                        const childrenTotalWidth = childrenWidths.reduce((sum, width) => sum + width + gap, 0) - gap;
+                        const totalSubtreeWidth = Math.max(selfWidth, childrenTotalWidth);
+
+                        // Position children first to determine parent's position
+                        if (node.children.length === 1) {
+                            // New logic: For a single child, position the child first...
+                            const childId = node.children[0];
+                            const childWidth = calculateSubtreeWidth(childId);
+                            
+                            // Position the child's subtree
+                            positionSubtree(childId, y + pfpSize + gap * 3, x);
+                            const childPos = userPositions.get(childId);
+
+                            // ...then center the parent directly above them.
+                            const parentWidth = (node.spouses.length + 1) * (pfpSize + gap) - gap;
+                            
+                            // The center of the child's profile picture
+                            const childPfpCenter = childPos.x + pfpSize / 2;
+                            
+                            // The starting x position for the parent block to be centered over the child's pfp
+                            const parentBlockX = childPfpCenter - parentWidth / 2;
+                            userPositions.set(userId, { x: parentBlockX, y });
+
+                            // Position any spouses relative to the main parent
+                            let spouseX = parentBlockX;
+                            for (const spouseId of node.spouses) {
+                                spouseX += pfpSize + gap;
+                                userPositions.set(spouseId, { x: spouseX, y: y });
+                            }
+
+                            finalHeight = Math.max(finalHeight, y + pfpSize + 25 + gap);
+                            
+                        } else {
+                            // Existing logic for multiple children
+                            const parentBlockStartX = x + (totalSubtreeWidth - selfWidth) / 2;
+                            let spouseX = parentBlockStartX;
+                            userPositions.set(userId, { x: spouseX, y: y });
+                            finalHeight = Math.max(finalHeight, y + pfpSize + 25 + gap);
+
+                            for (const spouseId of node.spouses) {
+                                spouseX += pfpSize + gap;
+                                userPositions.set(spouseId, { x: spouseX, y: y });
+                            }
+                            
+                            let currentChildX = x + (totalSubtreeWidth - childrenTotalWidth) / 2;
+                            for (let i = 0; i < node.children.length; i++) {
+                                const childId = node.children[i];
+                                const childWidth = childrenWidths[i];
+                                positionSubtree(childId, y + pfpSize + gap * 3, currentChildX);
+                                currentChildX += childWidth + gap;
+                            }
+                        }
+                        
+                        finalWidth = Math.max(finalWidth, x + totalSubtreeWidth);
+                        return x + totalSubtreeWidth + gap;
+                    };
+
+
+                    // A helper function to draw a single user, to keep the main logic clean
+                    const drawUser = async (context, member, pos) => {
+                        try {
+                            const pfp = await loadImage(member.displayAvatarURL({ extension: 'png' }));
+                            context.drawImage(pfp, pos.x, pos.y, pfpSize, pfpSize);
+                        } catch (error) {
+                            console.error(`Failed to load avatar for user ${member.id}:`, error);
+                        }
+
+                        context.fillStyle = '#FFFFFF';
+                        context.font = '24px sans-serif';
+                        context.textAlign = 'center';
+                        context.fillText(sanitizeText(member.displayName), pos.x + pfpSize / 2, pos.y + pfpSize + 25);
+                    };
+
+                    // Main drawing function
+                    const drawTree = async (context, guild) => {
+                        // Draw connections first
+                        context.lineWidth = 3;
+                        for (const [userId, node] of familyTree.entries()) {
+                            const userPos = userPositions.get(userId);
+                            if (!userPos) continue;
+
+                            // Draw marriage lines
+                            const spouses = node.spouses || [];
+                            context.strokeStyle = '#FF69B4'; // Pink
+                            for (const spouseId of spouses) {
+                                const spousePos = userPositions.get(spouseId);
+                                // Draw the marriage line only once
+                                if (userPos.x < spousePos.x) {
+                                    context.beginPath();
+                                    context.moveTo(userPos.x + pfpSize, userPos.y + pfpSize / 2);
+                                    context.lineTo(spousePos.x, spousePos.y + pfpSize / 2);
+                                    context.stroke();
+                                }
+                            }
+                            
+                            // Draw lines to children
+                            const children = node.children || [];
+                            context.strokeStyle = '#90EE90'; // Green
+                            if (children.length > 0) {
+                                const parentXCenter = spouses.length > 0
+                                    ? (userPos.x + userPositions.get(spouses[0]).x) / 2 + pfpSize / 2
+                                    : userPos.x + pfpSize / 2;
+                                
+                                const parentYBottom = userPos.y + pfpSize;
+
+                                if (children.length === 1) {
+                                    // New logic: Draw a direct vertical line for a single child
+                                    const childId = children[0];
+                                    const childPos = userPositions.get(childId);
+                                    if (childPos) {
+                                        const childXCenter = childPos.x + pfpSize / 2;
+                                        context.beginPath();
+                                        context.moveTo(parentXCenter, parentYBottom);
+                                        context.lineTo(childXCenter, childPos.y);
+                                        context.stroke();
+                                    }
+                                } else {
+                                    // Existing logic for multiple children
+                                    const horizontalLineY = parentYBottom + gap;
+
+                                    const firstChildPos = userPositions.get(children[0]);
+                                    const lastChildPos = userPositions.get(children[children.length - 1]);
+                                    if (firstChildPos && lastChildPos) {
+                                        const firstChildXCenter = firstChildPos.x + pfpSize / 2;
+                                        const lastChildXCenter = lastChildPos.x + pfpSize / 2;
+
+                                        // Draw the vertical line from parent(s) to the horizontal line
+                                        context.beginPath();
+                                        context.moveTo(parentXCenter, parentYBottom);
+                                        context.lineTo(parentXCenter, horizontalLineY);
+                                        context.stroke();
+                                        
+                                        // Draw the horizontal line connecting the children's vertical lines
+                                        context.beginPath();
+                                        context.moveTo(firstChildXCenter, horizontalLineY);
+                                        context.lineTo(lastChildXCenter, horizontalLineY);
+                                        context.stroke();
+
+                                        // Draw vertical lines from the horizontal line to each child
+                                        for (const childId of children) {
+                                            const childPos = userPositions.get(childId);
+                                            if (childPos) {
+                                                const childXCenter = childPos.x + pfpSize / 2;
+                                                context.beginPath();
+                                                context.moveTo(childXCenter, horizontalLineY);
+                                                context.lineTo(childXCenter, childPos.y);
+                                                context.stroke();
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Draw users and their names on top of lines
+                        for (const [userId, pos] of userPositions.entries()) {
+                            const member = guild.members.cache.get(userId);
+                            if (!member) continue;
+                            await drawUser(context, member, pos);
+                        }
+                    };
+
+
+                    // Start layout calculation
+                    const rootMember = guild.members.cache.get(rootUserId);
+                    if (rootMember) {
+                        // Run the two passes
+                        calculateSubtreeWidth(rootUserId);
+                        positionSubtree(rootUserId, 50, 50);
+
+                        // Create the final canvas with the correct size
+                        const finalCanvas = createCanvas(finalWidth + 100, finalHeight + 50);
+                        const finalContext = finalCanvas.getContext('2d');
+                        finalContext.fillStyle = '#2f3136';
+                        finalContext.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
+                        
+                        // Draw the tree on the new canvas
+                        await drawTree(finalContext, guild);
+                        
+                        const buffer = finalCanvas.toBuffer('image/png');
+                        const attachment = new AttachmentBuilder(buffer, { name: 'family-tree.png' });
+                        
+                        const familyTreeEmbed = new EmbedBuilder()
+                            .setTitle(`***👨‍👩‍👧‍👦 ${sanitizeText(rootMember.displayName)}'s Family Tree 👨‍👩‍👧‍👦***`)
+                            .setImage('attachment://family-tree.png')
+                            .setColor('#4890ff')
+                            .setTimestamp();
+                        
+                        await interaction.editReply({ embeds: [familyTreeEmbed], files: [attachment] });
+
+                    } else {
+                        return interaction.editReply({ content: 'Could not find the family root for that user.' });
+                    }
+                    
+                    break;
                 }
-            }
-        }
-        
-        // Draw users and their names on top of lines
-        for (const [userId, pos] of userPositions.entries()) {
-            const member = guild.members.cache.get(userId);
-            if (!member) continue;
-            await drawUser(context, member, pos);
-        }
-    };
-
-
-    // Start layout calculation
-    const rootMember = guild.members.cache.get(rootUserId);
-    if (rootMember) {
-        // Run the two passes
-        calculateSubtreeWidth(rootUserId);
-        positionSubtree(rootUserId, 50, 50);
-
-        // Create the final canvas with the correct size
-        const finalCanvas = createCanvas(finalWidth + 100, finalHeight + 50);
-        const finalContext = finalCanvas.getContext('2d');
-        finalContext.fillStyle = '#2f3136';
-        finalContext.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
-        
-        // Draw the tree on the new canvas
-        await drawTree(finalContext, guild);
-        
-        const buffer = finalCanvas.toBuffer('image/png');
-        const attachment = new AttachmentBuilder(buffer, { name: 'family-tree.png' });
-        
-        const familyTreeEmbed = new EmbedBuilder()
-            .setTitle(`***👨‍👩‍👧‍👦 ${sanitizeText(rootMember.displayName)}'s Family Tree 👨‍👩‍👧‍👦***`)
-            .setImage('attachment://family-tree.png')
-            .setColor('#4890ff')
-            .setTimestamp();
-        
-        await interaction.editReply({ embeds: [familyTreeEmbed], files: [attachment] });
-
-    } else {
-        return interaction.editReply({ content: 'Could not find the family root for that user.' });
-    }
-    
-    break;
-}
 
 
             // Admin-only force commands
@@ -1570,11 +1592,101 @@ module.exports = {
                     
                     break;
                 }
+            case 'marriage-certificate': {
+                const targetUser = interaction.options.getUser('user') || interaction.user;
+                const marriage = await Relationship.findOne({
+                    type: 'marriage',
+                    status: 'accepted',
+                    $or: [
+                        { initiatorId: targetUser.id },
+                        { targetId: targetUser.id }
+                    ]
+                });
 
-            
+                if (!marriage) {
+                    return interaction.reply({
+                        content: `${targetUser.id === interaction.user.id ? 'You are' : targetUser.username + ' is'} not married.`,
+                        ephemeral: true
+                    });
+                }
 
-            default: 
-                await interaction.reply({ content: 'Unknown subcommand.', flags: MessageFlags.Ephemeral });
+                const spouseId = marriage.initiatorId === targetUser.id ? marriage.targetId : marriage.initiatorId;
+                const spouse = await interaction.guild.members.fetch(spouseId);
+
+                // Marriage duration
+                const marriedAt = marriage.createdAt;
+                const days = Math.floor((Date.now() - marriedAt) / (1000 * 60 * 60 * 24));
+
+                // Count children & grandchildren recursively
+                async function countDescendants(userId) {
+                    const children = await Relationship.find({
+                        type: 'adoption',
+                        status: 'accepted',
+                        initiatorId: userId
+                    });
+                    let total = children.length;
+                    for (const child of children) {
+                        total += await countDescendants(child.targetId);
+                    }
+                    return total;
+                }
+                const childrenCount = await Relationship.countDocuments({
+                    type: 'adoption',
+                    status: 'accepted',
+                    initiatorId: targetUser.id
+                });
+                const totalDescendants = await countDescendants(targetUser.id);
+                const grandchildrenCount = totalDescendants - childrenCount;
+
+                // Create marriage certificate canvas
+                const canvas = createCanvas(600, 250);
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#000';
+                ctx.font = '30px Arial';
+                ctx.fillText('Marriage Certificate', 180, 50);
+
+                const [userPFP, spousePFP, ring] = await Promise.all([
+                    loadImage(targetUser.displayAvatarURL({ extension: 'png' })),
+                    loadImage(spouse.displayAvatarURL({ extension: 'png' })),
+                    loadImage('https://images.emojiterra.com/google/noto-emoji/unicode-15/color/512px/1f48d.png')
+                ]);
+
+                ctx.drawImage(userPFP, 50, 80, 100, 100);
+                ctx.drawImage(spousePFP, 450, 80, 100, 100);
+                ctx.drawImage(ring, 260, 90, 80, 80);
+
+                const buffer = canvas.toBuffer();
+                const attachment = new AttachmentBuilder(buffer, { name: 'marriage-certificate.png' });
+
+                const embed = new EmbedBuilder()
+                    .setColor('#ff69b4')
+                    .setTitle(`💍 Marriage Certificate for ${targetUser.username}`)
+                    .setDescription(`Married to: **${spouse.displayName}**\nMarried for: **${days} days**\nChildren: **${childrenCount}**\nGrandchildren: **${grandchildrenCount}**`)
+                    .setImage('attachment://marriage-certificate.png')
+                    .setFooter({
+                        text: `requested by **${interaction.user.displayName}**`,
+                        iconURL: interaction.user.displayAvatarURL()
+                    })
+                    .setTimestamp();
+
+                await interaction.reply({ embeds: [embed], files: [attachment] });
+                break;
+            }
         }
-    },
+
+        async function transferCustody(newParentId, marriage) {
+            const oldParentId = marriage.initiatorId === newParentId ? marriage.targetId : marriage.initiatorId;
+            const children = await Relationship.find({
+                type: 'adoption',
+                status: 'accepted',
+                initiatorId: oldParentId
+            });
+            for (const child of children) {
+                child.initiatorId = newParentId;
+                await child.save();
+            }
+        }
+    }
 };
