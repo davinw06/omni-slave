@@ -416,8 +416,8 @@ client.on('guildMemberAdd', async member => {
         .setThumbnail(member.user.displayAvatarURL({ extension: 'png', size: 1024 }))
         .setColor('#59ffa9')
         .addFields(
-            { name: 'User', value: member.user.tag, inline: true },
-            { name: 'DisplayName', value: member.displayName, inline: true },
+            { name: 'User', value: member.user.tag, inline: false },
+            { name: 'DisplayName', value: member.displayName, inline: false },
         )
         .setTimestamp();
     loggingChannel.send({ embeds: [welcomeLoggingEmbed] });
@@ -442,8 +442,8 @@ client.on('guildMemberRemove', async member => {
             const kickEmbed = new EmbedBuilder()
                 .setTitle('Member Kicked')
                 .addFields(
-                    { name: 'Kicked by', value: executor ? executorMember.displayName : 'Unknown', inline: true },
-                    { name: 'Reason', value: reason || 'No reason provided.', inline: true },
+                    { name: 'Kicked by', value: executor ? executorMember.displayName : 'Unknown', inline: false },
+                    { name: 'Reason', value: reason || 'No reason provided.', inline: false },
                 )
                 .setColor('#ff0000')
                 .setThumbnail(member.user.displayAvatarURL({ extension: 'png', size: 1024 }))
@@ -457,8 +457,8 @@ client.on('guildMemberRemove', async member => {
                 .setThumbnail(member.user.displayAvatarURL({ extension: 'png', size: 1024 }))
                 .setColor('#ff0000')
                 .addFields(
-                    { name: 'User', value: member.user.tag, inline: true },
-                    { name: 'DisplayName', value: member.displayName, inline: true },
+                    { name: 'User', value: member.user.tag, inline: false },
+                    { name: 'DisplayName', value: member.displayName, inline: false },
                 )
                 .setTimestamp();
             loggingChannel.send({ embeds: [leaveLoggingEmbed] });
@@ -471,8 +471,8 @@ client.on('guildMemberRemove', async member => {
             .setThumbnail(member.user.displayAvatarURL({ extension: 'png', size: 1024 }))
             .setColor('#ff0000')
             .addFields(
-                { name: 'User', value: member.user.tag, inline: true },
-                { name: 'DisplayName', value: member.displayName, inline: true },
+                { name: 'User', value: member.user.tag, inline: false },
+                { name: 'DisplayName', value: member.displayName, inline: false },
             )
             .setTimestamp();
         loggingChannel.send({ embeds: [leaveLoggingEmbed] });
