@@ -22,15 +22,17 @@ module.exports = {
         const decorBoolean = interaction.options.getBoolean('decoration');
         if(!decorBoolean) decorBoolean = false;
 
-        const avatar = user.displayAvatarURL({ extension: 'png', size: 512 });
+        const avatar = user.displayAvatarURL({ extension: 'png', size: 1024 });
         const authorAvatarURL = interaction.user.displayAvatarURL({ extension: 'png', size: 1024 });
-        const decoration = user.avatarDecorationURL ? user.avatarDecorationURL({ extension: 'png', size: 512 }) : null ;
+        const decoration = user.avatarDecorationURL ? user.avatarDecorationURL({ extension: 'png', size: 1024 }) : null ;
 
         let userAvatar = avatar;
         let attachments = [];
-        const canvasSize = 512;
-        const avCanvasSize = 456;
+        const canvasSize = 1024;
+        const avCanvasSize = 912;
         const avPosition = (canvasSize - avCanvasSize)/2;
+        const avCtxArc = 456;
+
         if(decorBoolean === true) {
             if (decoration) {
                 const canvas = createCanvas(canvasSize, canvasSize);
@@ -40,7 +42,7 @@ module.exports = {
                 const avContext = avCanvas.getContext('2d');
 
                 avContext.beginPath();
-                avContext.arc(200, 200, 200, 0, Math.PI * 2, true);
+                avContext.arc(avCtxArc, avCtxArc, avCtxArc, 0, Math.PI * 2, true);
                 avContext.closePath();
                 avContext.clip();
 
