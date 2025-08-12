@@ -29,7 +29,7 @@ module.exports = {
         let userAvatar = avatar;
         let attachments = [];
         const canvasSize = 1024;
-        const avCanvasSize = 896;
+        const avCanvasSize = 864;
         const avPosition = (canvasSize - avCanvasSize)/2;
         const avCtxArc = 456;
 
