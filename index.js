@@ -407,11 +407,9 @@ client.on('guildMemberAdd', async member => {
     const loggingChannel = member.guild.channels.cache.get(LOGGING_CHANNEL_ID);
     if (!welcomeChannel) return;
     let welcomeEmbed = new EmbedBuilder()
-        .setImage('https://i.imgur.com/KQxfKhA_d.png?maxwidth=520&shape=thumb&fidelity=high');
-    welcomeChannel.send({
-        embeds: [welcomeEmbed],
-        content: `Welcome <@${member.id}> to **${member.guild.name}**, we hope you enjoy your stay! Go to <#${GENERAL_CHANNEL_ID}> to chat with others or <#${INTRODUCTION_CHANNEL_ID}> to introduce yourself to everyone. Read up on <#${CHAT_CLIPS_CHANNEL_ID}> to learn more about our server. Check out <#${REACTION_ROLES_CHANNEL_ID}> to change your colors or change your roles.`
-    });
+        .setImage('https://i.imgur.com/KQxfKhA_d.png');
+    await welcomeChannel.send({embeds: [welcomeEmbed]});
+    await welcomeChannel.send({content: `Welcome <@${member.id}> to **${member.guild.name}**, we hope you enjoy your stay! Go to <#${GENERAL_CHANNEL_ID}> to chat with others or <#${INTRODUCTION_CHANNEL_ID}> to introduce yourself to everyone. Read up on <#${CHAT_CLIPS_CHANNEL_ID}> to learn more about our server. Check out <#${REACTION_ROLES_CHANNEL_ID}> to change your colors or change your roles.`});
     if (!loggingChannel) return;
     const welcomeLoggingEmbed = new EmbedBuilder()
         .setTitle(`New Member Joined`)
