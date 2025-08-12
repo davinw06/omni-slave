@@ -401,93 +401,84 @@ client.on(Events.InteractionCreate, async interaction => {
     }
 });
 
+
 client.on('guildMemberAdd', async member => {
     const welcomeChannel = member.guild.channels.cache.get(WELCOME_CHANNEL_ID);
     const loggingChannel = member.guild.channels.cache.get(LOGGING_CHANNEL_ID);
-
-    if(!welcomeChannel) {
-        console.log('Welcome Channel does not exist!');
-    }
-
+    if (!welcomeChannel) return;
     let welcomeEmbed = new EmbedBuilder()
         .setImage('https://i.imgur.com/KQxfKhA_d.png?maxwidth=520&shape=thumb&fidelity=high');
-    
-    welcomeChannel.send({ embeds: [welcomeEmbed], content: `Welcome <@${member.id}> to **${member.guild.name}**, 
-        we hope you enjoy your stay! Go to ${GENERAL_CHANNEL_ID} to chat with others or ${INTRODUCTION_CHANNEL_ID} to introduce yourself to everyone. 
-        Read up on ${CHAT_CLIPS_CHANNEL_ID} to learn more about our server. Check out ${REACTION_ROLES_CHANNEL_ID} to change your colors or change your roles.` 
-    })
-
+    welcomeChannel.send({
+        embeds: [welcomeEmbed],
+        content: `Welcome <@${member.id}> to **${member.guild.name}**, 
+        we hope you enjoy your stay! Go to <#${GENERAL_CHANNEL_ID}> to chat with others or <#${INTRODUCTION_CHANNEL_ID}> to introduce yourself to everyone. 
+        Read up on <#${CHAT_CLIPS_CHANNEL_ID}> to learn more about our server. Check out <#${REACTION_ROLES_CHANNEL_ID}> to change your colors or change your roles.`
+    });
+    if (!loggingChannel) return;
     const welcomeLoggingEmbed = new EmbedBuilder()
         .setTitle(`New Member Joined`)
-        .setThumbnail(member.displayAvatarURL({ format: 'png', size: 1024 }))
+        .setThumbnail(member.user.displayAvatarURL({ extension: 'png', size: 1024 }))
         .setColor('#59ffa9')
         .addFields(
-            { name: 'User', value: member.tag, inline: false },
+            { name: 'User', value: member.user.tag, inline: false },
             { name: 'DisplayName', value: member.displayName, inline: false },
         )
         .setTimestamp();
-
     loggingChannel.send({ embeds: [welcomeLoggingEmbed] });
 });
 
 client.on('guildMemberRemove', async member => {
     const farewellChannel = member.guild.channels.cache.get(FAREWELL_CHANNEL_ID);
     const loggingChannel = member.guild.channels.cache.get(LOGGING_CHANNEL_ID);
-
-    if(!farewellChannel) {
-        console.log('Departure Channel does not exist!');
-    }
-
+    if (!farewellChannel) return;
     try {
         const auditLogs = await member.guild.fetchAuditLogs({
             limit: 1,
             type: AuditLogEvent.MemberKick,
         });
-
         const kickedLog = auditLogs.entries.first();
-
-        const { executor, reason } = kickedLog;
-
-        if(kickedLog && kickedLog.target.id === member.id) {
+        if (kickedLog && kickedLog.target.id === member.id) {
+            const { executor, reason } = kickedLog;
             farewellChannel.send(`${member.displayName} was kicked from the server! Goodbye and good riddance!🍻`);
+            if (!loggingChannel) return;
             const kickEmbed = new EmbedBuilder()
                 .setTitle('Member Kicked')
                 .addFields(
-                    { name: 'Kicked by', value: executor ? executor.displayName+' '+executor.member.tag : 'Unknown', inline: false },
+                    { name: 'Kicked by', value: executor ? executor.tag : 'Unknown', inline: false },
                     { name: 'Reason', value: reason || 'No reason provided.', inline: false },
                 )
                 .setColor('#ff0000')
-                .setThumbnail(member.displayAvatarURL({ format: 'png', size: 1024 }))
+                .setThumbnail(member.user.displayAvatarURL({ extension: 'png', size: 1024 }))
                 .setTimestamp();
             loggingChannel.send({ embeds: [kickEmbed] });
         } else {
             farewellChannel.send(`Goodbye ${member.displayName}! We hope you had a good time in our server!👋`);
+            if (!loggingChannel) return;
             const leaveLoggingEmbed = new EmbedBuilder()
                 .setTitle(`Member Left`)
-                .setThumbnail(member.displayAvatarURL({ format: 'png', size: 1024 }))
+                .setThumbnail(member.user.displayAvatarURL({ extension: 'png', size: 1024 }))
                 .setColor('#ff0000')
                 .addFields(
-                    { name: 'User', value: member.tag, inline: false },
+                    { name: 'User', value: member.user.tag, inline: false },
                     { name: 'DisplayName', value: member.displayName, inline: false },
                 )
                 .setTimestamp();
-            loggingChannel.send({ embeds: leaveLoggingEmbed });
+            loggingChannel.send({ embeds: [leaveLoggingEmbed] });
         }
-    } catch(error) {
-        console.log('An error has occured in sending departure message for kicked member!', error);
+    } catch (error) {
+        if (!loggingChannel) return;
         farewellChannel.send(`Goodbye ${member.displayName}! We hope you had a good time in our server!👋`);
         const leaveLoggingEmbed = new EmbedBuilder()
             .setTitle(`Member Left`)
-            .setThumbnail(member.displayAvatarURL({ format: 'png', size: 1024 }))
+            .setThumbnail(member.user.displayAvatarURL({ extension: 'png', size: 1024 }))
             .setColor('#ff0000')
             .addFields(
-                { name: 'User', value: member.tag, inline: false },
+                { name: 'User', value: member.user.tag, inline: false },
                 { name: 'DisplayName', value: member.displayName, inline: false },
             )
             .setTimestamp();
-        loggingChannel.send({ embeds: leaveLoggingEmbed });
+        loggingChannel.send({ embeds: [leaveLoggingEmbed] });
     }
-
 });
 
 client.on('guildMemberUpdate', (oldMember, newMember) => {
