@@ -14,6 +14,8 @@ module.exports = {
     async execute(interaction) {
         const initiator = interaction.user;
         let victim = interaction.options.getUser('user') || interaction.user;
+        let victimMember = interaction.options.getMember('user') || interaction.member;
+        const initiatorMember = interaction.member;
         let initiatorAvatar = initiator.displayAvatarURL({ extension: 'png', size: 1024 });
         let victimAvatar = victim.displayAvatarURL({ extension: 'png', size: 1024 });
 
@@ -39,9 +41,9 @@ module.exports = {
 
         const duration = 5;
 
-        if(victim.member.roles.cache.has(underage_RoleID)) {
+        if(victimMember.roles.cache.has(underage_RoleID)) {
             if(interaction.member.roles.highest.position < interaction.member.me.roles.highest.position) {
-                if(!initiator.member.roles.cache.has(underage_RoleID)) {
+                if(!initiatorMember.roles.cache.has(underage_RoleID)) {
                     await interaction.followUp(`Looks like <@${victim.id}> was a minor, let's hear what the FBI has to say about this...`);
                     const randomint = Math.floor(Math.random() * 12) + 1;
                     if(randomint < 5) {
@@ -77,9 +79,9 @@ module.exports = {
                 const randomint = Math.floor(Math.random() * 12) + 1;
                 if(randomint < 5) {
                     const timeoutInMilliseconds = duration * 60 * 1000;
-                    if(initiator.member.roles.cache.has(mod_RoleID)) {
+                    if(initiatorMember.roles.cache.has(mod_RoleID)) {
                         try {
-                            initiator.member.roles.remove(mod_RoleID, `Role removed successfully due to peg command`);
+                            initiatorMember.roles.remove(mod_RoleID, `Role removed successfully due to peg command`);
                             console.log(`Role successfully removed from ${initiator.tag} due to peg command`);
                         } catch(error) {
                             console.error('Failed to remove role', error);
