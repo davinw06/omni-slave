@@ -17,16 +17,6 @@ module.exports = {
             // Fetch the user's basic info
             await user.fetch();
 
-            // Fetch the user's profile info (including bio) via REST API
-            let bio = null;
-            try {
-                const profileData = await interaction.client.rest.get(`/users/${user.id}/profile`);
-                bio = profileData?.user?.bio || null;
-                console.log(`[ProfileCard] Fetched bio for ${user.tag}: "${bio}"`);
-            } catch (err) {
-                console.warn(`Could not fetch bio for ${user.tag}:`, err);
-            }
-
             const bannerUrl = user.bannerURL({ size: 1024, format: 'png' });
             const accentColor = user.hexAccentColor || '#000000'; // Default black if no accent
 
@@ -74,12 +64,6 @@ module.exports = {
                 )
                 .setFooter({ text: `Requested by ${interaction.user.username}`, iconURL: interaction.user.displayAvatarURL({ dynamic: true }) })
                 .setTimestamp();
-
-            if (bio) {
-                profileEmbed.addFields({ name: 'About Me', value: bio, inline: false });
-            } else {
-                profileEmbed.addFields({ name: 'About Me', value: 'No bio set.', inline: false });
-            }
 
             if (bannerUrl) {
                 profileEmbed.setImage(bannerUrl);
