@@ -100,11 +100,9 @@ module.exports = {
         const avatar = targetUser.displayAvatarURL({ extension: 'png', size: 512 });
         const decoration = targetUser.avatarDecorationURL({ extension: 'png', size: 512 });
 
-        let userAvatar;
+        let userAvatar = avatar;
 
-        if(!decoration) {
-            userAvatar = avatar;
-        } else {
+        if(decoration) {
             const canvas = createCanvas(512, 512);
             const context = canvas.getContext('2d');
 
@@ -114,7 +112,9 @@ module.exports = {
             const decor = await loadImage(decoration);
             context.drawImage(decor, 0, 0, 512, 512);
 
-            userAvatar = new AttachmentBuilder(canvas.toBuffer(), {name: 'profile.png'});
+            const attachment = new AttachmentBuilder(canvas.toBuffer(), {name: 'profile.png'});
+
+            userAvatar = 'attachment://profile.png';
         }
 
         let userEmbed = new EmbedBuilder()
