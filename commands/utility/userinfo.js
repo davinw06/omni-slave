@@ -111,7 +111,7 @@ module.exports = {
             const avContext = canvas.getContext('2d');
 
             avContext.beginPath();
-            avContext.arc(256, 256, 256, 0, Math.PI * 2, true); // center (256,256), radius 256
+            avContext.arc(128, 128, 256, 0, Math.PI * 2, true); // center (256,256), radius 256
             avContext.closePath();
             avContext.clip();
 
