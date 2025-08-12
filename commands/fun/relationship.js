@@ -1641,9 +1641,9 @@ module.exports = {
                 // Create marriage certificate canvas
                 const canvas = createCanvas(600, 250);
                 const ctx = canvas.getContext('2d');
-                ctx.fillStyle = '#000';
+                ctx.fillStyle = '#2c3434';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.fillStyle = '#000';
+                ctx.fillStyle = '#ffffff';
                 ctx.font = '30px Arial';
                 ctx.fillText('Marriage Certificate', 180, 50);
 
