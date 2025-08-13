@@ -1329,84 +1329,144 @@ module.exports = {
                     };
 
                     // --- Drawing (lines first, then avatars) ---
-                    const drawTree = async (context, guild) => {
-                        context.lineWidth = 3;
+                    // Helper: Get all ancestors of a user
+                    function getAncestors(userId, visited = new Set()) {
+                        if (visited.has(userId)) return visited;
+                        visited.add(userId);
+                        const node = familyTree.get(userId);
+                        if (!node) return visited;
 
-                        // Draw marriages (once per pair, only for group rep to avoid duplicates)
-                        for (const [userId, node] of familyTree.entries()) {
-                            const rep = getGroupRep(userId);
-                            if (rep !== userId) continue; // only representative draws lines
-
-                            const members = getGroupMembers(rep);
-                            // Pink marriage lines between adjacent members in the block
-                            context.strokeStyle = '#FF69B4';
-                            for (let i = 0; i < members.length - 1; i++) {
-                                const aPos = userPositions.get(members[i]);
-                                const bPos = userPositions.get(members[i + 1]);
-                                if (!aPos || !bPos) continue;
-                                context.beginPath();
-                                context.moveTo(aPos.x + pfpSize, aPos.y + pfpSize / 2);
-                                context.lineTo(bPos.x, bPos.y + pfpSize / 2);
-                                context.stroke();
+                        // Loop through parents
+                        for (const [id, person] of familyTree.entries()) {
+                            if (person.children?.includes(userId)) {
+                                getAncestors(id, visited);
                             }
+                        }
+                        return visited;
+                    }
 
-                            // Children connectors (merged, filtered by generation)
-                            const children = getGroupChildren(rep);
-                            if (children.length === 0) continue;
+                    // Helper: Get all descendants of a user
+                    function getDescendants(userId, visited = new Set()) {
+                        if (visited.has(userId)) return visited;
+                        visited.add(userId);
+                        const node = familyTree.get(userId);
+                        if (!node) return visited;
 
-                            // Compute union block center (handles 1+ spouses)
-                            const leftX = userPositions.get(members[0])?.x ?? 0;
-                            const rightX = (userPositions.get(members[members.length - 1])?.x ?? leftX) + pfpSize;
-                            const parentXCenter = (leftX + rightX) / 2;
-                            const parentYBottom = (userPositions.get(members[0])?.y ?? 0) + pfpSize;
+                        if (node.children) {
+                            for (const childId of node.children) {
+                                getDescendants(childId, visited);
+                            }
+                        }
+                        return visited;
+                    }
 
-                            context.strokeStyle = '#90EE90'; // Green
+                    // Helper: Detect incest between any related individuals
+                    function isIncestConnection(personAId, personBId) {
+                        const ancestorsA = getAncestors(personAId);
+                        const descendantsA = getDescendants(personAId);
+                        const allRelativesA = new Set([...ancestorsA, ...descendantsA]);
 
-                            if (children.length === 1) {
-                                const childPos = userPositions.get(getGroupRep(children[0])) || userPositions.get(children[0]);
-                                if (childPos) {
-                                    const childXCenter = childPos.x + pfpSize / 2;
+                        const nodeB = familyTree.get(personBId);
+                        if (!nodeB) return false;
+
+                        // Check if B is related to A
+                        if (allRelativesA.has(personBId)) return true;
+
+                        // Check if B's spouses are related to A
+                        for (const spouseId of nodeB.spouses || []) {
+                            if (allRelativesA.has(spouseId)) return true;
+                        }
+                        return false;
+                    }
+
+                    // Main drawing function
+                    const drawTree = async (context, guild) => {
+                        // Draw connections first
+                        context.lineWidth = 3;
+                        for (const [userId, node] of familyTree.entries()) {
+                            const userPos = userPositions.get(userId);
+                            if (!userPos) continue;
+
+                            // Draw marriage lines
+                            const spouses = node.spouses || [];
+                            context.strokeStyle = '#FF69B4'; // Pink
+                            for (const spouseId of spouses) {
+                                const spousePos = userPositions.get(spouseId);
+                                if (!spousePos) continue;
+
+                                // Draw the marriage line only once (avoid duplicates)
+                                if (userPos.x < spousePos.x) {
                                     context.beginPath();
-                                    context.moveTo(parentXCenter, parentYBottom);
-                                    context.lineTo(childXCenter, childPos.y);
+                                    context.moveTo(userPos.x + pfpSize, userPos.y + pfpSize / 2);
+                                    context.lineTo(spousePos.x, spousePos.y + pfpSize / 2);
                                     context.stroke();
                                 }
-                            } else {
-                                const horizontalLineY = parentYBottom + gap;
+                            }
+                            
+                            // Draw lines to children
+                            const children = node.children || [];
+                            context.strokeStyle = '#90EE90'; // Green
 
-                                const firstPos = userPositions.get(getGroupRep(children[0])) || userPositions.get(children[0]);
-                                const lastPos = userPositions.get(getGroupRep(children[children.length - 1])) || userPositions.get(children[children.length - 1]);
-                                if (firstPos && lastPos) {
-                                    const firstChildXCenter = firstPos.x + pfpSize / 2;
-                                    const lastChildXCenter = lastPos.x + pfpSize / 2;
+                            if (children.length > 0) {
+                                const parentXCenter = spouses.length > 0
+                                    ? (userPos.x + userPositions.get(spouses[0]).x) / 2 + pfpSize / 2
+                                    : userPos.x + pfpSize / 2;
+                                const parentYBottom = userPos.y + pfpSize;
 
-                                    // Vertical drop from parents to the horizontal line
-                                    context.beginPath();
-                                    context.moveTo(parentXCenter, parentYBottom);
-                                    context.lineTo(parentXCenter, horizontalLineY);
-                                    context.stroke();
+                                // Filter out incest cases
+                                const safeChildren = children.filter(childId => !isIncestConnection(userId, childId));
+                                if (safeChildren.length === 0) continue;
 
-                                    // Horizontal connector across all children
-                                    context.beginPath();
-                                    context.moveTo(firstChildXCenter, horizontalLineY);
-                                    context.lineTo(lastChildXCenter, horizontalLineY);
-                                    context.stroke();
-
-                                    // Vertical drops to each child
-                                    for (const c of children) {
-                                        const cPos = userPositions.get(getGroupRep(c)) || userPositions.get(c);
-                                        if (!cPos) continue;
-                                        const cx = cPos.x + pfpSize / 2;
+                                if (safeChildren.length === 1) {
+                                    // Direct vertical line for a single safe child
+                                    const childId = safeChildren[0];
+                                    const childPos = userPositions.get(childId);
+                                    if (childPos) {
+                                        const childXCenter = childPos.x + pfpSize / 2;
                                         context.beginPath();
-                                        context.moveTo(cx, horizontalLineY);
-                                        context.lineTo(cx, cPos.y);
+                                        context.moveTo(parentXCenter, parentYBottom);
+                                        context.lineTo(childXCenter, childPos.y);
                                         context.stroke();
+                                    }
+                                } else {
+                                    // Multiple children: draw horizontal connector
+                                    const horizontalLineY = parentYBottom + gap;
+                                    const firstChildPos = userPositions.get(safeChildren[0]);
+                                    const lastChildPos = userPositions.get(safeChildren[safeChildren.length - 1]);
+
+                                    if (firstChildPos && lastChildPos) {
+                                        const firstChildXCenter = firstChildPos.x + pfpSize / 2;
+                                        const lastChildXCenter = lastChildPos.x + pfpSize / 2;
+
+                                        // Vertical from parent(s) to horizontal line
+                                        context.beginPath();
+                                        context.moveTo(parentXCenter, parentYBottom);
+                                        context.lineTo(parentXCenter, horizontalLineY);
+                                        context.stroke();
+
+                                        // Horizontal line connecting children
+                                        context.beginPath();
+                                        context.moveTo(firstChildXCenter, horizontalLineY);
+                                        context.lineTo(lastChildXCenter, horizontalLineY);
+                                        context.stroke();
+
+                                        // Vertical lines down to each safe child
+                                        for (const childId of safeChildren) {
+                                            const childPos = userPositions.get(childId);
+                                            if (childPos) {
+                                                const childXCenter = childPos.x + pfpSize / 2;
+                                                context.beginPath();
+                                                context.moveTo(childXCenter, horizontalLineY);
+                                                context.lineTo(childXCenter, childPos.y);
+                                                context.stroke();
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
-
-                        // Draw users on top
+                        
+                        // Draw users and their names on top of lines
                         for (const [userId, pos] of userPositions.entries()) {
                             const member = guild.members.cache.get(userId);
                             if (!member) continue;
