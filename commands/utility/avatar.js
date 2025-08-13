@@ -24,7 +24,7 @@ module.exports = {
 
         const avatar = user.displayAvatarURL({ extension: 'png', size: 1024 });
         const authorAvatarURL = interaction.user.displayAvatarURL({ extension: 'png', size: 1024 });
-        const decoration = user.avatarDecorationURL ? user.avatarDecorationURL({ extension: 'gif', size: 1024 }) : null ;
+        const decoration = user.avatarDecorationURL ? user.avatarDecorationURL({ extension: 'png', size: 1024 }) : null ;
 
         let userAvatar = avatar;
         let attachments = [];
@@ -55,10 +55,10 @@ module.exports = {
                 context.drawImage(decor, 0, 0, canvasSize, canvasSize);
 
                 const buffer = canvas.toBuffer();
-                const attachment = new AttachmentBuilder(buffer, {name: 'profile.gif'});
+                const attachment = new AttachmentBuilder(buffer, {name: 'profile.png'});
                 attachments.push(attachment);
 
-                userAvatar = 'attachment://profile.gif';
+                userAvatar = 'attachment://profile.png';
 
                 const embed = new EmbedBuilder()
                     .setColor('#C70039')
