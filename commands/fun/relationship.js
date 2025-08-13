@@ -1114,332 +1114,277 @@ module.exports = {
                     const targetUser = interaction.options.getUser('user') || interaction.user;
                     const guild = interaction.guild;
 
-                    const sanitizeText = (text) => {
-                        return text.replace(/[^a-zA-Z0-9 ]/g, '');
-                    };
+                    const sanitizeText = (text) => text.replace(/[^a-zA-Z0-9 ]/g, '');
 
-                    // --- Finding the Family Root ---
+                    // --- Find root ---
                     let rootUserId = targetUser.id;
                     let currentUserId = targetUser.id;
                     let hasParents = true;
-
                     while (hasParents) {
-                        const parentRelationship = await Relationship.findOne({
+                        const parentRel = await Relationship.findOne({
                             type: 'adoption',
                             status: 'accepted',
                             targetId: currentUserId
                         });
-
-                        if (parentRelationship) {
-                            currentUserId = parentRelationship.initiatorId;
+                        if (parentRel) {
+                            currentUserId = parentRel.initiatorId;
                             rootUserId = currentUserId;
                         } else {
                             hasParents = false;
                         }
                     }
 
-                    // --- Build family tree map ---
+                    // --- Build tree ---
                     const familyTree = new Map();
                     const queue = [rootUserId];
                     const visited = new Set();
+                    while (queue.length) {
+                        const uid = queue.shift();
+                        if (visited.has(uid)) continue;
+                        visited.add(uid);
 
-                    while (queue.length > 0) {
-                        const userId = queue.shift();
-                        if (visited.has(userId)) continue;
-                        visited.add(userId);
-
-                        const userRelationships = await Relationship.find({
-                            $or: [
-                                { initiatorId: userId },
-                                { targetId: userId }
-                            ],
+                        const rels = await Relationship.find({
+                            $or: [{ initiatorId: uid }, { targetId: uid }],
                             status: 'accepted'
                         });
 
-                        const childrenIds = new Set();
-                        const spouseIds = new Set();
-                        const parentIds = new Set();
+                        const children = new Set();
+                        const spouses = new Set();
+                        const parents = new Set();
 
-                        for (const rel of userRelationships) {
-                            if (rel.type === 'adoption') {
-                                if (rel.initiatorId === userId) {
-                                    childrenIds.add(rel.targetId);
-                                    if (!visited.has(rel.targetId)) queue.push(rel.targetId);
-                                } else if (rel.targetId === userId) {
-                                    parentIds.add(rel.initiatorId);
-                                    if (!visited.has(rel.initiatorId)) queue.push(rel.initiatorId);
+                        for (const r of rels) {
+                            if (r.type === 'adoption') {
+                                if (r.initiatorId === uid) {
+                                    children.add(r.targetId);
+                                    if (!visited.has(r.targetId)) queue.push(r.targetId);
+                                } else {
+                                    parents.add(r.initiatorId);
+                                    if (!visited.has(r.initiatorId)) queue.push(r.initiatorId);
                                 }
-                            } else if (rel.type === 'marriage') {
-                                const spouseId = rel.initiatorId === userId ? rel.targetId : rel.initiatorId;
-                                spouseIds.add(spouseId);
-                                if (!visited.has(spouseId)) queue.push(spouseId);
+                            } else if (r.type === 'marriage') {
+                                const sid = r.initiatorId === uid ? r.targetId : r.initiatorId;
+                                spouses.add(sid);
+                                if (!visited.has(sid)) queue.push(sid);
                             }
                         }
 
-                        familyTree.set(userId, {
-                            children: Array.from(childrenIds),
-                            spouses: Array.from(spouseIds),
-                            parents: Array.from(parentIds)
+                        familyTree.set(uid, {
+                            children: [...children],
+                            spouses: [...spouses],
+                            parents: [...parents]
                         });
                     }
 
-                    // --- Helper: Get all descendants ---
-                    const getAllDescendants = (id, set = new Set()) => {
-                        if (!familyTree.has(id)) return set;
-                        for (const child of familyTree.get(id).children) {
-                            if (!set.has(child)) {
-                                set.add(child);
-                                getAllDescendants(child, set);
+                    // --- Helper: get all descendants of a user ---
+                    const getAllDescendants = (id) => {
+                        const result = new Set();
+                        const stack = [...(familyTree.get(id)?.children || [])];
+                        while (stack.length) {
+                            const c = stack.pop();
+                            if (!result.has(c)) {
+                                result.add(c);
+                                stack.push(...(familyTree.get(c)?.children || []));
                             }
                         }
-                        return set;
+                        return result;
                     };
 
                     // --- Incest detection ---
                     const incestPairs = new Set();
                     const incestNodes = new Set();
+                    for (const [ancestorId] of familyTree) {
+                        const descendants = getAllDescendants(ancestorId);
+                        if (descendants.size < 2) continue;
 
-                    for (const [userId, node] of familyTree.entries()) {
-                        const descendants = getAllDescendants(userId);
-                        const descendantSet = new Set(descendants);
-                        for (const d1 of descendantSet) {
-                            const spouses = familyTree.get(d1)?.spouses || [];
+                        for (const d of descendants) {
+                            const spouses = familyTree.get(d)?.spouses || [];
                             for (const s of spouses) {
-                                if (descendantSet.has(s)) {
-                                    const key = [d1, s].sort().join('-');
+                                if (descendants.has(s)) {
+                                    const key = [d, s].sort().join('-');
                                     incestPairs.add(key);
-                                    incestNodes.add(d1);
+                                    incestNodes.add(d);
                                     incestNodes.add(s);
-                                    console.log(`Incest detected between ${d1} and ${s}`);
                                 }
                             }
                         }
                     }
 
-                    const isIncestConnection = (parentId, childId) => {
-                        if (incestNodes.has(parentId) || incestNodes.has(childId)) return true;
-                        const childDescendants = getAllDescendants(childId);
-                        for (const d of childDescendants) {
-                            if (incestNodes.has(d)) return true;
-                        }
-                        return false;
-                    };
+                    const isIncestConnection = (parentId, childId) => incestNodes.has(childId);
 
-                    // --- Canvas drawing ---
+                    // --- Layout ---
                     const pfpSize = 80;
                     const gap = 40;
                     const userPositions = new Map();
                     let finalWidth = 0;
                     let finalHeight = 0;
 
-                    const calculateSubtreeWidth = (userId) => {
-                        const node = familyTree.get(userId);
+                    const calculateSubtreeWidth = (uid) => {
+                        const node = familyTree.get(uid);
                         if (!node) return pfpSize;
-
-                        const visibleChildren = node.children.filter(c => !isIncestConnection(userId, c));
+                        const visibleChildren = node.children.filter(c => !isIncestConnection(uid, c));
                         if (visibleChildren.length === 0) {
-                            const selfWidth = (node.spouses.length + 1) * (pfpSize + gap) - gap;
-                            return selfWidth;
+                            return (node.spouses.length + 1) * (pfpSize + gap) - gap;
                         }
-                        if (visibleChildren.length === 1) {
-                            return Math.max(
-                                (node.spouses.length + 1) * (pfpSize + gap) - gap,
-                                calculateSubtreeWidth(visibleChildren[0])
-                            );
-                        }
-
-                        const childrenWidths = visibleChildren.map(childId => calculateSubtreeWidth(childId));
-                        let childrenTotalWidth = childrenWidths.reduce((sum, width) => sum + width + gap, 0);
-                        childrenTotalWidth = Math.max(0, childrenTotalWidth - gap);
-
+                        const childrenWidths = visibleChildren.map(c => calculateSubtreeWidth(c));
+                        let total = childrenWidths.reduce((sum, w) => sum + w + gap, 0) - gap;
+                        total = Math.max(0, total);
                         const selfWidth = (node.spouses.length + 1) * (pfpSize + gap) - gap;
-                        return Math.max(selfWidth, childrenTotalWidth);
+                        return Math.max(selfWidth, total);
                     };
 
-                    const positionSubtree = (userId, y, x) => {
-                        const node = familyTree.get(userId);
+                    const positionSubtree = (uid, y, x) => {
+                        const node = familyTree.get(uid);
                         if (!node) {
-                            userPositions.set(userId, { x, y });
+                            userPositions.set(uid, { x, y });
                             finalHeight = Math.max(finalHeight, y + pfpSize + 25 + gap);
                             finalWidth = Math.max(finalWidth, x + pfpSize);
                             return x + pfpSize + gap;
                         }
 
-                        const visibleChildren = node.children.filter(c => !isIncestConnection(userId, c));
+                        const visibleChildren = node.children.filter(c => !isIncestConnection(uid, c));
                         const selfWidth = (node.spouses.length + 1) * (pfpSize + gap) - gap;
-
-                        if (visibleChildren.length === 0) {
-                            userPositions.set(userId, { x, y });
-                            let spouseX = x;
-                            for (const spouseId of node.spouses) {
-                                spouseX += pfpSize + gap;
-                                userPositions.set(spouseId, { x: spouseX, y });
-                            }
-                            finalHeight = Math.max(finalHeight, y + pfpSize + 25 + gap);
-                            finalWidth = Math.max(finalWidth, x + selfWidth);
-                            return x + selfWidth + gap;
-                        }
+                        const childrenWidths = visibleChildren.map(c => calculateSubtreeWidth(c));
+                        const childrenTotalWidth = childrenWidths.reduce((s, w) => s + w + gap, 0) - gap;
+                        const totalWidth = Math.max(selfWidth, childrenTotalWidth);
 
                         if (visibleChildren.length === 1) {
                             const childId = visibleChildren[0];
-                            const childWidth = calculateSubtreeWidth(childId);
-                            const childX = x;
-                            positionSubtree(childId, y + pfpSize + gap * 3, childX);
+                            positionSubtree(childId, y + pfpSize + gap * 3, x);
                             const childPos = userPositions.get(childId);
-                            const parentBlockX = childPos.x + pfpSize / 2 - selfWidth / 2;
-                            userPositions.set(userId, { x: parentBlockX, y });
-                            let spouseX = parentBlockX;
-                            for (const spouseId of node.spouses) {
-                                spouseX += pfpSize + gap;
-                                userPositions.set(spouseId, { x: spouseX, y });
+                            const childCenter = childPos.x + pfpSize / 2;
+                            const parentBlockX = childCenter - selfWidth / 2;
+                            userPositions.set(uid, { x: parentBlockX, y });
+                            let sx = parentBlockX;
+                            for (const sid of node.spouses) {
+                                sx += pfpSize + gap;
+                                userPositions.set(sid, { x: sx, y });
                             }
-                            finalHeight = Math.max(finalHeight, y + pfpSize + 25 + gap);
-                            finalWidth = Math.max(finalWidth, parentBlockX + selfWidth);
-                            return parentBlockX + selfWidth + gap;
+                        } else {
+                            const startX = x + (totalWidth - selfWidth) / 2;
+                            let sx = startX;
+                            userPositions.set(uid, { x: sx, y });
+                            for (const sid of node.spouses) {
+                                sx += pfpSize + gap;
+                                userPositions.set(sid, { x: sx, y });
+                            }
+                            let cx = x + (totalWidth - childrenTotalWidth) / 2;
+                            for (let i = 0; i < visibleChildren.length; i++) {
+                                cx = positionSubtree(visibleChildren[i], y + pfpSize + gap * 3, cx);
+                            }
                         }
 
-                        const childrenWidths = visibleChildren.map(childId => calculateSubtreeWidth(childId));
-                        const childrenTotalWidth = childrenWidths.reduce((sum, width) => sum + width + gap, 0) - gap;
-                        const totalSubtreeWidth = Math.max(selfWidth, childrenTotalWidth);
-
-                        const parentBlockStartX = x + (totalSubtreeWidth - selfWidth) / 2;
-                        let spouseX = parentBlockStartX;
-                        userPositions.set(userId, { x: spouseX, y });
                         finalHeight = Math.max(finalHeight, y + pfpSize + 25 + gap);
-
-                        for (const spouseId of node.spouses) {
-                            spouseX += pfpSize + gap;
-                            userPositions.set(spouseId, { x: spouseX, y });
-                        }
-
-                        let currentChildX = x + (totalSubtreeWidth - childrenTotalWidth) / 2;
-                        for (let i = 0; i < visibleChildren.length; i++) {
-                            const childId = visibleChildren[i];
-                            const childWidth = childrenWidths[i];
-                            positionSubtree(childId, y + pfpSize + gap * 3, currentChildX);
-                            currentChildX += childWidth + gap;
-                        }
-
-                        finalWidth = Math.max(finalWidth, x + totalSubtreeWidth);
-                        return x + totalSubtreeWidth + gap;
+                        finalWidth = Math.max(finalWidth, x + totalWidth);
+                        return x + totalWidth + gap;
                     };
 
-                    const drawUser = async (context, member, pos) => {
+                    // --- Draw ---
+                    const drawUser = async (ctx, member, pos) => {
                         try {
                             const pfp = await loadImage(member.displayAvatarURL({ extension: 'png' }));
-                            context.drawImage(pfp, pos.x, pos.y, pfpSize, pfpSize);
-
+                            ctx.drawImage(pfp, pos.x, pos.y, pfpSize, pfpSize);
                             if (incestNodes.has(member.id)) {
-                                context.strokeStyle = 'red';
-                                context.lineWidth = 5;
-                                context.strokeRect(pos.x, pos.y, pfpSize, pfpSize);
+                                ctx.strokeStyle = 'red';
+                                ctx.lineWidth = 5;
+                                ctx.strokeRect(pos.x, pos.y, pfpSize, pfpSize);
                             }
-                        } catch (error) {
-                            console.error(`Failed to load avatar for user ${member.id}:`, error);
-                        }
-
-                        context.fillStyle = '#FFFFFF';
-                        context.font = '24px sans-serif';
-                        context.textAlign = 'center';
-                        context.fillText(sanitizeText(member.displayName), pos.x + pfpSize / 2, pos.y + pfpSize + 25);
+                        } catch {}
+                        ctx.fillStyle = '#FFF';
+                        ctx.font = '24px sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(sanitizeText(member.displayName), pos.x + pfpSize / 2, pos.y + pfpSize + 25);
                     };
 
-                    const drawTree = async (context, guild) => {
-                        context.lineWidth = 3;
-                        for (const [userId, node] of familyTree.entries()) {
-                            const userPos = userPositions.get(userId);
-                            if (!userPos) continue;
+                    const drawTree = async (ctx, guild) => {
+                        ctx.lineWidth = 3;
+                        for (const [uid, node] of familyTree.entries()) {
+                            const pos = userPositions.get(uid);
+                            if (!pos) continue;
 
-                            const spouses = node.spouses || [];
-                            context.strokeStyle = '#FF69B4';
-                            for (const spouseId of spouses) {
-                                const spousePos = userPositions.get(spouseId);
-                                if (spousePos && userPos.x < spousePos.x) {
-                                    context.beginPath();
-                                    context.moveTo(userPos.x + pfpSize, userPos.y + pfpSize / 2);
-                                    context.lineTo(spousePos.x, spousePos.y + pfpSize / 2);
-                                    context.stroke();
+                            // Marriage lines
+                            ctx.strokeStyle = '#FF69B4';
+                            for (const sid of node.spouses) {
+                                const spos = userPositions.get(sid);
+                                if (spos && pos.x < spos.x) {
+                                    ctx.beginPath();
+                                    ctx.moveTo(pos.x + pfpSize, pos.y + pfpSize / 2);
+                                    ctx.lineTo(spos.x, spos.y + pfpSize / 2);
+                                    ctx.stroke();
                                 }
                             }
 
-                            const children = node.children.filter(c => !isIncestConnection(userId, c)) || [];
-                            context.strokeStyle = '#90EE90';
-                            if (children.length > 0) {
-                                const parentXCenter = spouses.length > 0
-                                    ? (userPos.x + userPositions.get(spouses[0]).x) / 2 + pfpSize / 2
-                                    : userPos.x + pfpSize / 2;
-
-                                const parentYBottom = userPos.y + pfpSize;
-
-                                if (children.length === 1) {
-                                    const childId = children[0];
-                                    const childPos = userPositions.get(childId);
-                                    if (childPos) {
-                                        const childXCenter = childPos.x + pfpSize / 2;
-                                        context.beginPath();
-                                        context.moveTo(parentXCenter, parentYBottom);
-                                        context.lineTo(childXCenter, childPos.y);
-                                        context.stroke();
+                            // Children lines
+                            ctx.strokeStyle = '#90EE90';
+                            const visibleChildren = node.children.filter(c => !isIncestConnection(uid, c));
+                            if (visibleChildren.length) {
+                                const pxCenter = node.spouses.length
+                                    ? (pos.x + userPositions.get(node.spouses[0]).x) / 2 + pfpSize / 2
+                                    : pos.x + pfpSize / 2;
+                                const pyBottom = pos.y + pfpSize;
+                                if (visibleChildren.length === 1) {
+                                    const cpos = userPositions.get(visibleChildren[0]);
+                                    if (cpos) {
+                                        ctx.beginPath();
+                                        ctx.moveTo(pxCenter, pyBottom);
+                                        ctx.lineTo(cpos.x + pfpSize / 2, cpos.y);
+                                        ctx.stroke();
                                     }
                                 } else {
-                                    const horizontalLineY = parentYBottom + gap;
-                                    const firstChildPos = userPositions.get(children[0]);
-                                    const lastChildPos = userPositions.get(children[children.length - 1]);
-                                    if (firstChildPos && lastChildPos) {
-                                        const firstChildXCenter = firstChildPos.x + pfpSize / 2;
-                                        const lastChildXCenter = lastChildPos.x + pfpSize / 2;
-                                        context.beginPath();
-                                        context.moveTo(parentXCenter, parentYBottom);
-                                        context.lineTo(parentXCenter, horizontalLineY);
-                                        context.stroke();
-                                        context.beginPath();
-                                        context.moveTo(firstChildXCenter, horizontalLineY);
-                                        context.lineTo(lastChildXCenter, horizontalLineY);
-                                        context.stroke();
-                                        for (const childId of children) {
-                                            const childPos = userPositions.get(childId);
-                                            if (childPos) {
-                                                const childXCenter = childPos.x + pfpSize / 2;
-                                                context.beginPath();
-                                                context.moveTo(childXCenter, horizontalLineY);
-                                                context.lineTo(childXCenter, childPos.y);
-                                                context.stroke();
+                                    const hY = pyBottom + gap;
+                                    const firstPos = userPositions.get(visibleChildren[0]);
+                                    const lastPos = userPositions.get(visibleChildren[visibleChildren.length - 1]);
+                                    if (firstPos && lastPos) {
+                                        ctx.beginPath();
+                                        ctx.moveTo(pxCenter, pyBottom);
+                                        ctx.lineTo(pxCenter, hY);
+                                        ctx.stroke();
+                                        ctx.beginPath();
+                                        ctx.moveTo(firstPos.x + pfpSize / 2, hY);
+                                        ctx.lineTo(lastPos.x + pfpSize / 2, hY);
+                                        ctx.stroke();
+                                        for (const cid of visibleChildren) {
+                                            const cpos = userPositions.get(cid);
+                                            if (cpos) {
+                                                ctx.beginPath();
+                                                ctx.moveTo(cpos.x + pfpSize / 2, hY);
+                                                ctx.lineTo(cpos.x + pfpSize / 2, cpos.y);
+                                                ctx.stroke();
                                             }
                                         }
                                     }
                                 }
                             }
                         }
-
-                        for (const [userId, pos] of userPositions.entries()) {
-                            const member = guild.members.cache.get(userId);
-                            if (!member) continue;
-                            await drawUser(context, member, pos);
+                        for (const [uid, pos] of userPositions) {
+                            const member = guild.members.cache.get(uid);
+                            if (member) await drawUser(ctx, member, pos);
                         }
                     };
 
+                    // --- Render ---
                     const rootMember = guild.members.cache.get(rootUserId);
                     if (rootMember) {
                         calculateSubtreeWidth(rootUserId);
                         positionSubtree(rootUserId, 50, 50);
-                        const finalCanvas = createCanvas(finalWidth + 100, finalHeight + 50);
-                        const finalContext = finalCanvas.getContext('2d');
-                        finalContext.fillStyle = '#2f3136';
-                        finalContext.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
-                        await drawTree(finalContext, guild);
-                        const buffer = finalCanvas.toBuffer('image/png');
+                        const canvas = createCanvas(finalWidth + 100, finalHeight + 50);
+                        const ctx = canvas.getContext('2d');
+                        ctx.fillStyle = '#2f3136';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        await drawTree(ctx, guild);
+                        const buffer = canvas.toBuffer('image/png');
                         const attachment = new AttachmentBuilder(buffer, { name: 'family-tree.png' });
-                        const familyTreeEmbed = new EmbedBuilder()
+                        const embed = new EmbedBuilder()
                             .setTitle(`👨‍👩‍👧‍👦 ${sanitizeText(rootMember.displayName)}'s Family Tree 👨‍👩‍👧‍👦`)
                             .setImage('attachment://family-tree.png')
                             .setColor('#4890ff')
                             .setTimestamp();
-                        await interaction.editReply({ embeds: [familyTreeEmbed], files: [attachment] });
+                        await interaction.editReply({ embeds: [embed], files: [attachment] });
                     } else {
                         return interaction.editReply({ content: 'Could not find the family root for that user.' });
                     }
                     break;
                 }
+
             // Admin-only force commands
             case 'force-marry':
                 {
