@@ -510,73 +510,72 @@ client.on('guildMemberUpdate', (oldMember, newMember) => {
     }
 });
 
+const ACTIVITY_IDS = {
+    Chess: '832012774040141894',
+    Blazing8s: '832025144389533716',
+    Pool: '1315883196151238657',
+    Poker: '755827207812677713',
+    Scrabble: '879863686565621790',
+    BlackJack: '1300612940486934591',
+    Sketchheads: '902271654783242291',
+    PuttParty: '945737671223947305',
+    Sudoku: '1273616940451102832'
+};
+
+const VOICE_CHANNEL_TO_ACTIVITY = {
+    '1403509385589948518': ACTIVITY_IDS.Chess, // Example VC ID for Chess
+    '1404027141456269372': ACTIVITY_IDS.Blazing8s, // Example VC ID for Blazing8s
+    '1403547834262749194': ACTIVITY_IDS.Pool, // Example VC ID for Pool
+    '1404027984180023477': ACTIVITY_IDS.Poker, // Example VC ID for Poker
+    '1404029888574394418': ACTIVITY_IDS.Scrabble, // Example VC ID for Scrabble
+    '1403503076522070197': ACTIVITY_IDS.BlackJack, // Example VC ID for BlackJack
+    '1405568425685680259': ACTIVITY_IDS.Sketchheads // Example VC ID for Sketchheads
+};
+
+
 client.on('voiceStateUpdate', (oldState, newState) => {
-    const voiceChannel = newState.channel;
-    const member = newState.member;
-    let VC_ID = voiceChannel.id;
-    let ACTIVITY_ID = '';
-    const Chess_ID = '1403509385589948518';
-    const Blazing8_ID ='1404027141456269372';
-    const Pool_ID = '1403547834262749194';
-    const Poker_ID = '1404027984180023477';
-    const Scrabble_ID = '1404029888574394418';
-    const BlackJack_ID = '1403503076522070197';
-    const Sketchheads_ID = '1405568425685680259';
+    if (oldState.channelId === null && newState.channelId !== null && newState.channel.members.size === 1) {
+        const member = newState.member;
+        const voiceChannel = newState.channel;
+        let activityIdToLaunch = '';
 
-    const Sudoku_ActivityID = '1273616940451102832';
-    const PuttParty_ActivityID = '945737671223947305';
+        console.log(`${member.user.tag} has joined voice channel: ${voiceChannel.name}`);
 
-    const category = voiceChannel.parent;
-    const voiceTextChannel = category.children.cache.find( channel => 
-        channel.name === voiceChannel.name && channel.type === ChannelType.GuildText
-    );
-
-    if(VC_ID === Chess_ID || VC_ID === Blazing8_ID || VC_ID === Pool_ID || VC_ID === Poker_ID || VC_ID === Scrabble_ID || VC_ID === BlackJack_ID || VC_ID === Sketchheads_ID) {
-        let activityUrl = ``;
-        if(VC_ID === Chess_ID) {
-            ACTIVITY_ID = '832012774040141894';
-            activityUrl = `discord://activities/${ACTIVITY_ID}?channel_id=${VC_ID}`;
-        } else if(VC_ID === Blazing8_ID) {
-            ACTIVITY_ID = '832025144389533716';
-            activityUrl = `discord://activities/${ACTIVITY_ID}?channel_id=${VC_ID}`;
-        } else if(VC_ID === Pool_ID) {
-            ACTIVITY_ID = '1315883196151238657';
-            activityUrl = `discord://activities/${ACTIVITY_ID}?channel_id=${VC_ID}`;
-            
-        } else if(VC_ID === Poker_ID) {
-            ACTIVITY_ID = '755827207812677713';
-            activityUrl = `discord://activities/${ACTIVITY_ID}?channel_id=${VC_ID}`;
-            
-        } else if(VC_ID === Scrabble_ID) {
-            ACTIVITY_ID = '879863686565621790';
-            activityUrl = `discord://activities/${ACTIVITY_ID}?channel_id=${VC_ID}`;
-            
-        } else if(VC_ID === BlackJack_ID) {
-            ACTIVITY_ID = '1300612940486934591';
-            activityUrl = `discord://activities/${ACTIVITY_ID}?channel_id=${VC_ID}`;
-            
-        } else if(VC_ID === Sketchheads_ID) {
-            ACTIVITY_ID = '902271654783242291';
-            activityUrl = `discord://activities/${ACTIVITY_ID}?channel_id=${VC_ID}`;
-            
-        }
-        if(newState.channel.members.size <= 1) {
-            voiceTextChannel.send(`Welcome <@${member.id}>! Join <${activityUrl}> `);
+        if (VOICE_CHANNEL_TO_ACTIVITY[voiceChannel.id]) {
+            activityIdToLaunch = VOICE_CHANNEL_TO_ACTIVITY[voiceChannel.id];
+        } 
+        else if (voiceChannel.name === 'Putt Party⛳') {
+            activityIdToLaunch = ACTIVITY_IDS.PuttParty;
+        } else if (voiceChannel.name === 'SUDOKU') {
+            activityIdToLaunch = ACTIVITY_IDS.Sudoku;
         }
 
-    } else if(voiceChannel.name === 'Putt Party⛳') {
-        
-        activityUrl = `discord://activities/${PuttParty_ActivityID}?channel_id=${VC_ID}`;
-        
-        voiceTextChannel.send(`Welcome <@${member.id}>! Join <${activityUrl}> `);
-    } else if(voiceChannel.name === 'SUDOKU') {
-        
-        activityUrl = `discord://activities/${Sudoku_ActivityID}?channel_id=${VC_ID}`;
-        
-        voiceTextChannel.send(`Welcome <@${member.id}>! Join <${activityUrl}> `);
+        if (activityIdToLaunch) {
+            const activityUrl = `discord://activities/${activityIdToLaunch}?channel_id=${voiceChannel.id}`;
+            const message = `Welcome <@${member.id}>! Join <${activityUrl}>`;
+
+            const category = voiceChannel.parent;
+            if (category) {
+                const voiceTextChannel = category.children.cache.find(
+                    channel => channel.name === voiceChannel.name && channel.type === ChannelType.GuildText
+                );
+
+                // IMPORTANT: We must check if the linked text channel was found before sending a message.
+                if (voiceTextChannel) {
+                    voiceTextChannel.send(message)
+                        .then(() => console.log(`Sent activity link to the linked text channel.`))
+                        .catch(error => console.error('Failed to send message:', error));
+                } else {
+                    console.error(`Error: No linked text channel with the name '${voiceChannel.name}' found in the same category.`);
+                }
+            } else {
+                console.error(`Error: Voice channel '${voiceChannel.name}' is not in a category.`);
+            }
+        } else {
+            console.log(`No configured activity for voice channel '${voiceChannel.name}' (ID: ${voiceChannel.id})`);
+        }
     }
-})
-
+});
 
 client.login(token);
 
