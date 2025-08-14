@@ -510,72 +510,52 @@ client.on('guildMemberUpdate', (oldMember, newMember) => {
     }
 });
 
-const ACTIVITY_IDS = {
-    Chess: '832012774040141894',
-    Blazing8s: '832025144389533716',
-    Pool: '1315883196151238657',
-    Poker: '755827207812677713',
-    Scrabble: '879863686565621790',
-    BlackJack: '1300612940486934591',
-    Sketchheads: '902271654783242291',
-    PuttParty: '945737671223947305',
-    Sudoku: '1273616940451102832'
-};
-
-const VOICE_CHANNEL_TO_ACTIVITY = {
-    '1403509385589948518': ACTIVITY_IDS.Chess, // Example VC ID for Chess
-    '1404027141456269372': ACTIVITY_IDS.Blazing8s, // Example VC ID for Blazing8s
-    '1403547834262749194': ACTIVITY_IDS.Pool, // Example VC ID for Pool
-    '1404027984180023477': ACTIVITY_IDS.Poker, // Example VC ID for Poker
-    '1404029888574394418': ACTIVITY_IDS.Scrabble, // Example VC ID for Scrabble
-    '1403503076522070197': ACTIVITY_IDS.BlackJack, // Example VC ID for BlackJack
-    '1405568425685680259': ACTIVITY_IDS.Sketchheads // Example VC ID for Sketchheads
-};
-
-
 client.on('voiceStateUpdate', (oldState, newState) => {
-    if (oldState.channelId === null && newState.channelId !== null && newState.channel.members.size === 1) {
-        const member = newState.member;
-        const voiceChannel = newState.channel;
-        let activityIdToLaunch = '';
+    const voiceChannel = newState.channel;
+    if (!voiceChannel) return; // user left channel
 
-        console.log(`${member.user.tag} has joined voice channel: ${voiceChannel.name}`);
+    const member = newState.member;
+    const VC_ID = voiceChannel.id;
 
-        if (VOICE_CHANNEL_TO_ACTIVITY[voiceChannel.id]) {
-            activityIdToLaunch = VOICE_CHANNEL_TO_ACTIVITY[voiceChannel.id];
-        } 
-        else if (voiceChannel.name === 'Putt Party⛳') {
-            activityIdToLaunch = ACTIVITY_IDS.PuttParty;
-        } else if (voiceChannel.name === 'SUDOKU') {
-            activityIdToLaunch = ACTIVITY_IDS.Sudoku;
-        }
+    // Map of VC_ID -> Activity ID
+    const activityMap = {
+        '1403509385589948518': '832012774040141894', // Chess
+        '1404027141456269372': '832025144389533716', // Blazing 8
+        '1403547834262749194': '1315883196151238657', // Pool
+        '1404027984180023477': '755827207812677713', // Poker
+        '1404029888574394418': '879863686565621790', // Scrabble
+        '1403503076522070197': '1300612940486934591', // Blackjack
+        '1405568425685680259': '902271654783242291', // Sketchheads
+    };
 
-        if (activityIdToLaunch) {
-            const activityUrl = `discord://activities/${activityIdToLaunch}?channel_id=${voiceChannel.id}`;
-            const message = `Welcome <@${member.id}>! Join <${activityUrl}>`;
+    // Map of channel names -> Activity ID (for non-ID specific ones)
+    const nameActivityMap = {
+        'Putt Party⛳': '945737671223947305',
+        'SUDOKU': '1273616940451102832',
+    };
 
-            const category = voiceChannel.parent;
-            if (category) {
-                const voiceTextChannel = category.children.cache.find(
-                    channel => channel.name === voiceChannel.name && channel.type === ChannelType.GuildText
-                );
+    let ACTIVITY_ID = activityMap[VC_ID] || nameActivityMap[voiceChannel.name];
+    if (!ACTIVITY_ID) return; // not a tracked activity channel
 
-                // IMPORTANT: We must check if the linked text channel was found before sending a message.
-                if (voiceTextChannel) {
-                    voiceTextChannel.send(message)
-                        .then(() => console.log(`Sent activity link to the linked text channel.`))
-                        .catch(error => console.error('Failed to send message:', error));
-                } else {
-                    console.error(`Error: No linked text channel with the name '${voiceChannel.name}' found in the same category.`);
-                }
-            } else {
-                console.error(`Error: Voice channel '${voiceChannel.name}' is not in a category.`);
-            }
-        } else {
-            console.log(`No configured activity for voice channel '${voiceChannel.name}' (ID: ${voiceChannel.id})`);
-        }
+    const activityUrl = `discord://activities/${ACTIVITY_ID}?channel_id=${VC_ID}`;
+
+    // Find matching text channel in the category
+    let voiceTextChannel;
+    if (voiceChannel.parent) {
+        voiceTextChannel = voiceChannel.parent.children.cache.find(
+            channel => channel.name === voiceChannel.name && channel.type === ChannelType.GuildText
+        );
+    }
+
+    if (!voiceTextChannel) return; // no matching text channel
+
+    // Only send if first member in the channel
+    if (newState.channel.members.size <= 1) {
+        voiceTextChannel.send(`Welcome <@${member.id}>! Join <${activityUrl}>`);
     }
 });
+
+
 
 client.login(token);
 
