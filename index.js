@@ -540,12 +540,7 @@ client.on('voiceStateUpdate', (oldState, newState) => {
     const activityUrl = `discord://activities/${ACTIVITY_ID}?channel_id=${VC_ID}`;
 
     // Find matching text channel in the category
-    let voiceTextChannel;
-    if (voiceChannel.parent) {
-        voiceTextChannel = voiceChannel.parent.children.cache.find(
-            channel => channel.name === voiceChannel.name && channel.type === ChannelType.GuildText
-        );
-    }
+    const voiceTextChannel = voiceChannel.guild.channels.cache.get(voiceChannel.id);
 
     if (!voiceTextChannel) return; // no matching text channel
 
