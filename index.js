@@ -79,6 +79,7 @@ const client = new Client({
         GatewayIntentBits.GuildMessageReactions,
         GatewayIntentBits.GuildPresences,
         GatewayIntentBits.GuildModeration,
+        GatewayIntentBits.GuildVoiceStates,
     ],
     partials: [
         Partials.Channel,
@@ -508,6 +509,81 @@ client.on('guildMemberUpdate', (oldMember, newMember) => {
         }
     }
 });
+
+client.on('voiceStateUpdate', (oldState, newState) => {
+    let VC_ID;
+    let ACTIVITY_ID;
+    const Chess_ID = '1403509385589948518';
+    const Blazing8_ID ='1404027141456269372';
+    const Pool_ID = '1403547834262749194';
+    const Poker_ID = '1404027984180023477';
+    const Scrabble_ID = '1404029888574394418';
+    const BlackJack_ID = '1403503076522070197';
+    const Sketchheads_ID = '1405568425685680259';
+
+    const Sudoku_ActivityID = '1273616940451102832';
+    const PuttParty_ActivityID = '945737671223947305';
+
+    const voiceChannel = newState.channel;
+    const member = newState.member;
+
+    if(voiceChannel.id === Chess_ID || voiceChannel.id === Blazing8_ID || voiceChannel.id === Pool_ID || voiceChannel.id === Poker_ID || voiceChannel.id === Scrabble_ID || voiceChannel.id === BlackJack_ID || voiceChannel.id === Sketchheads_ID) {
+        VC_ID = voiceChannel.id;
+        if(VC_ID === Chess_ID) {
+            ACTIVITY_ID = '832012774040141894';
+            const activityUrl = `discord://activities/${ACTIVITY_ID}?channel_id=${VC_ID}`;
+            if(newState.channel.members.size <= 1) {
+                voiceChannel.send(`Welcome <@${member.id}>! Join <${activityUrl}> `);
+            }
+        } else if(VC_ID === Blazing8_ID) {
+            ACTIVITY_ID = '832025144389533716';
+            const activityUrl = `discord://activities/${ACTIVITY_ID}?channel_id=${VC_ID}`;
+            if(newState.channel.members.size <= 1) {
+                voiceChannel.send(`Welcome <@${member.id}>! Join <${activityUrl}> `);
+            }
+        } else if(VC_ID === Pool_ID) {
+            ACTIVITY_ID = '1315883196151238657';
+            const activityUrl = `discord://activities/${ACTIVITY_ID}?channel_id=${VC_ID}`;
+            if(newState.channel.members.size <= 1) {
+                voiceChannel.send(`Welcome <@${member.id}>! Join <${activityUrl}> `);
+            }
+        } else if(VC_ID === Poker_ID) {
+            ACTIVITY_ID = '755827207812677713';
+            const activityUrl = `discord://activities/${ACTIVITY_ID}?channel_id=${VC_ID}`;
+            if(newState.channel.members.size <= 1) {
+                voiceChannel.send(`Welcome <@${member.id}>! Join <${activityUrl}> `);
+            }
+        } else if(VC_ID === Scrabble_ID) {
+            ACTIVITY_ID = '879863686565621790';
+            const activityUrl = `discord://activities/${ACTIVITY_ID}?channel_id=${VC_ID}`;
+            if(newState.channel.members.size <= 1) {
+                voiceChannel.send(`Welcome <@${member.id}>! Join <${activityUrl}> `);
+            }
+        } else if(VC_ID === BlackJack_ID) {
+            ACTIVITY_ID = '1300612940486934591';
+            const activityUrl = `discord://activities/${ACTIVITY_ID}?channel_id=${VC_ID}`;
+            if(newState.channel.members.size <= 1) {
+                voiceChannel.send(`Welcome <@${member.id}>! Join <${activityUrl}> `);
+            }
+        } else if(VC_ID === Sketchheads_ID) {
+            ACTIVITY_ID = '902271654783242291';
+            const activityUrl = `discord://activities/${ACTIVITY_ID}?channel_id=${VC_ID}`;
+            if(newState.channel.members.size <= 1) {
+                voiceChannel.send(`Welcome <@${member.id}>! Join <${activityUrl}> `);
+            }
+        }
+    } else if(voiceChannel.name === 'Putt Party⛳') {
+        VC_ID = voiceChannel.id;
+        const activityUrl = `discord://activities/${PuttParty_ActivityID}?channel_id=${VC_ID}`;
+        
+        voiceChannel.send(`Welcome <@${member.id}>! Join <${activityUrl}> `);
+    } else if(voiceChannel.name === 'SUDOKU') {
+        VC_ID = voiceChannel.id;
+        const activityUrl = `discord://activities/${Sudoku_ActivityID}?channel_id=${VC_ID}`;
+        
+        voiceChannel.send(`Welcome <@${member.id}>! Join <${activityUrl}> `);
+    }
+})
 
 
 client.login(token);
