@@ -510,14 +510,15 @@ client.on('guildMemberUpdate', (oldMember, newMember) => {
     }
 });
 
-client.on('voiceStateUpdate', (oldState, newState) => {
+
+client.on('voiceStateUpdate', async (oldState, newState) => {
     const voiceChannel = newState.channel;
-    if (!voiceChannel) return; // user left channel
+    if (!voiceChannel) return; // User left VC
 
     const member = newState.member;
     const VC_ID = voiceChannel.id;
 
-    // Map of VC_ID -> Activity ID
+    // Map VC IDs to activity IDs
     const activityMap = {
         '1403509385589948518': '832012774040141894', // Chess
         '1404027141456269372': '832025144389533716', // Blazing 8
@@ -528,28 +529,38 @@ client.on('voiceStateUpdate', (oldState, newState) => {
         '1405568425685680259': '902271654783242291', // Sketchheads
     };
 
-    // Map of channel names -> Activity ID (for non-ID specific ones)
+    // Map VC names to activity IDs
     const nameActivityMap = {
         'Putt Party⛳': '945737671223947305',
         'SUDOKU': '1273616940451102832',
     };
 
-    let ACTIVITY_ID = activityMap[VC_ID] || nameActivityMap[voiceChannel.name];
-    if (!ACTIVITY_ID) return; // not a tracked activity channel
+    // Determine activity ID
+    const ACTIVITY_ID = activityMap[VC_ID] || nameActivityMap[voiceChannel.name];
+    if (!ACTIVITY_ID) return; // Not an activity channel
 
-    const activityUrl = `discord://activities/${ACTIVITY_ID}?channel_id=${VC_ID}`;
-
-    // Find matching text channel in the category
+    // Get the voice channel's text chat (same ID as VC)
     const voiceTextChannel = voiceChannel.guild.channels.cache.get(voiceChannel.id);
+    if (!voiceTextChannel || !voiceTextChannel.isTextBased()) return;
 
-    if (!voiceTextChannel) return; // no matching text channel
+    // Optional: only send if they’re the first person in VC
+    if (voiceChannel.members.size > 1) return;
 
-    // Only send if first member in the channel
-    if (newState.channel.members.size <= 1) {
-        voiceTextChannel.send(`Welcome <@${member.id}>! Join <${activityUrl}>`);
+    try {
+        // Create the activity invite
+        const invite = await voiceChannel.createInvite({
+            maxAge: 0, // never expires
+            targetApplication: ACTIVITY_ID,
+            targetType: 2 // Activity
+        });
+
+        // Send the clickable bubble
+        await voiceTextChannel.send(`Welcome <@${member.id}>! ${invite.url}`);
+
+    } catch (err) {
+        console.error(`Failed to create activity invite:`, err);
     }
 });
-
 
 
 client.login(token);
