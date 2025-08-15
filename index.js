@@ -69,6 +69,7 @@ const REACTION_ROLES_CHANNEL_ID = '1379585673446817852';
 const CHAT_CLIPS_CHANNEL_ID = '1381885335675469955';
 const FAREWELL_CHANNEL_ID = '1380682881994723428';
 const LOGGING_CHANNEL_ID = '1381905624522031114';
+const BUMPING_CHANNEL_ID = '1382635651991736372';
 
 const client = new Client({
     intents: [
@@ -264,6 +265,32 @@ client.on(Events.MessageCreate, async message => {
                 const reason = afkData.Message || "I'm busy right now.";
                 await message.reply({ content: `${members.tag} is AFK. Reason: **${reason}**` });
             }
+        }
+    }
+});
+// Discord bump timer logic 
+const BUMP_TIMER = 120 * 60_000;
+const BUMP_ROLE_ID = '1395467455593451572';
+
+client.on('messageCreate', async (message) => {
+    if(message.author.id === client.user.id)
+        return;
+
+    if(message.channel.id !== BUMPING_CHANNEL_ID)
+        return;
+
+    if(message.author.bot) {
+        if(message.embeds.length > 0) {
+            console.log(`Detected message from bot: ${message.author.tag}`);
+            await message.channel.send(`Thanks for bumping my shit! Good boy!!`);
+
+            setTimeout(async () => {
+                try {
+                    await message.channel.send(`<@&${BUMP_ROLE_ID}>, A bump is now available!`);
+                } catch(eror) {
+                    console.error('Failed to send Bump notification:', eror);
+                }
+            }, BUMP_TIMER);
         }
     }
 });
