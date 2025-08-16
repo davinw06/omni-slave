@@ -4,16 +4,14 @@ const clientId = process.env.CLIENT_ID;
 const guildId = process.env.GUILD_ID;
 const token = process.env.DISCORD_TOKEN;
 
-const express = require('express');
-const app = express();
 const fs = require('node:fs');
 const path = require('node:path');
 const mongoose = require('mongoose');
 const fetch = require('node-fetch');
 
 
-const mongoURI = process.env.MONGO_URI;
-
+const express = require('express');
+const app = express();
 app.listen(process.env.PORT || 3000, () => {
     console.log(`Web server is listening on port ${process.env.PORT || 3000}`);
 });
@@ -21,6 +19,8 @@ app.listen(process.env.PORT || 3000, () => {
 app.get('/', (req, res) => {
     res.send("The Discord bot is alive!");
 });
+
+const mongoURI = process.env.MONGO_URI;
 
 mongoose.connect(mongoURI, {
     useNewUrlParser: true,
@@ -61,6 +61,7 @@ const StickyMessage = require('./Schemas.js/stickyMessageSchema');
 const MessageModel = require('./Schemas.js/messageSchema');
 const afkSchema = require('./Schemas.js/afkSchema');
 const userSchema = require('./Schemas.js/userSchema');
+const { isUtf8 } = require('node:buffer');
 
 const WELCOME_CHANNEL_ID = '1379585527992291348';
 const GENERAL_CHANNEL_ID = '1379562445248659538';
@@ -136,13 +137,24 @@ for (const filePath of commandFiles) {
 }
 
 client.on('ready', async c => {
-    client.user.setPresence({
-        activities: [{
-            name: 'WHY DID YOU MAKE ME DO THIS!?',
-            type: ActivityType.Custom
-        }],
-        status: 'online'
-    });
+        
+        const statuses = [
+            // { type: ActivityType.Custom, state: 'WHY DID YOU MAKE ME DO THIS!?' },
+            { name: 'Your mom\'s moaning', type: ActivityType.Listening },
+            { name: 'Your mom\'s tiddies bounce', type: ActivityType.Watching},
+            { name: '\u200bWHY DID YOU MAKE ME DO THIS!?💢', type: ActivityType.Playing },
+            { name: '\u200bBUDDHA BUMP THIS MEAT!🗣️🔥🔥', type: ActivityType.Playing }
+        ];
+
+    let i = 0;
+    setInterval(() => {
+        client.user.setPresence({
+            activities: [statuses[i]],
+            status: 'online'
+        });
+
+        i = (i+1) % statuses.length;
+    }, 300_000);
 
     const rest = new REST().setToken(token);
 
@@ -196,6 +208,8 @@ client.on('ready', async c => {
         console.error('Error fetching existing reaction roles from database:', dbError);
     }
     console.log('Omni Slave is now online');
+
+    restoreBumpTimer(client);
 });
 
 // New event listener to log messages
@@ -271,6 +285,46 @@ client.on(Events.MessageCreate, async message => {
 // Discord bump timer logic 
 const BUMP_TIMER = 120 * 60_000;
 const BUMP_ROLE_ID = '1395467455593451572';
+const BUMP_DATA_FILE = path.join(__dirname, 'bump_data.json');
+
+function loadBumpData() {
+    if(!fs.existsSync(BUMP_DATA_FILE)) {
+        fs.writeFileSync(BUMP_DATA_FILE, JSON.stringify({ channelId: null, endTime: null }, null, 2));
+    }
+    return JSON.parse(fs.readFileSync(BUMP_DATA_FILE, 'utf8'));
+}
+
+function saveBumpData(data) {
+    fs.writeFileSync(BUMP_DATA_FILE, JSON.stringify(data, null, 2));
+}
+
+let bumpData = loadBumpData();
+
+function restoreBumpTimer(client) {
+    if(bumpData.endTime) {
+        const timeLeft = bumpData.endTime - Date.now();
+        if(timeLeft > 0) {
+            console.log(`Restoring bump timer with ${Math.ceil(timeLeft / 1000)} seconds left`);
+            setTimeout(async () => {
+                try {
+                    const channel = await client.channels.fetch(bumpData.channelId);
+                    await channel.send(`<@&${BUMP_ROLE_ID}>, A bump is now available!`);
+                    bumpData.endTime = null;
+                    saveBumpData(bumpData);
+                } catch(eror) {
+                    console.error('Failed to send Bump notification:', eror);
+                }
+            }, timeLeft);
+        } else {
+            console.log("Bump time has already passed. Sending right away!");
+            client.channels.fetch(bumpData.channelId)
+                .then(ch => ch.send(`<@&${BUMP_ROLE_ID}>, A bump is now available!`))
+                .catch(console.error);
+            bumpData = {};
+            saveBumpData(bumpData);
+        }
+    }
+}
 
 client.on('messageCreate', async (message) => {
     if(message.author.id === client.user.id)
@@ -284,9 +338,19 @@ client.on('messageCreate', async (message) => {
             console.log(`Detected message from bot: ${message.author.tag}`);
             await message.channel.send(`Thanks for bumping my shit! Good boy!!`);
 
+            const endTime = Date.now() + BUMP_TIMER;
+            bumpData = {
+                endTime,
+                endTimeISO: new Date(endTime).toISOString(),
+                channelId: message.channel.id
+            };
+            saveBumpData(bumpData);
+
             setTimeout(async () => {
                 try {
                     await message.channel.send(`<@&${BUMP_ROLE_ID}>, A bump is now available!`);
+                    bumpData.endTime = null;
+                    saveBumpData(bumpData);
                 } catch(eror) {
                     console.error('Failed to send Bump notification:', eror);
                 }
