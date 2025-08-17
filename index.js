@@ -12,15 +12,15 @@ const fetch = require('node-fetch');
 const { registerRelationshipEvents } = require('./relationshipEvents');
 
 
-// const express = require('express');
-// const app = express();
-// app.listen(process.env.PORT || 3000, () => {
-//     console.log(`Web server is listening on port ${process.env.PORT || 3000}`);
-// });
+const express = require('express');
+const app = express();
+app.listen(process.env.PORT || 3000, () => {
+    console.log(`Web server is listening on port ${process.env.PORT || 3000}`);
+});
 
-// app.get('/', (req, res) => {
-//     res.send("The Discord bot is alive!");
-// });
+app.get('/', (req, res) => {
+    res.send("The Discord bot is alive!");
+});
 
 const mongoURI = process.env.MONGO_URI;
 
