@@ -1,258 +1,218 @@
-// commands/relationships.js
-const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, Embed, MessageFlags, ComponentType, AttachmentBuilder, PermissionsBitField } = require('discord.js');
-const Relationship = require('../../Schemas.js/relationshipSchema'); // Adjust the path to your Relationship model
-const mongoose = require('mongoose'); // Used to check MongoDB connection status
-const { createCanvas, loadImage, registerFont } = require('canvas'); // Import canvas library for image manipulation
-
-// Register a font with wide Unicode support to handle more characters.
-// This is an optional step but can improve rendering for some special characters.
-// It's still not a full solution for all custom fonts.
-try {
-    registerFont('./fonts/Arial-Regular.ttf', { family: 'Arial' });
-} catch (e) {
-    // This might fail if the font file isn't present, so we'll just continue.
-    console.error("Could not register Noto Sans font. Proceeding with default font.");
-}
-
-
-// Function to sanitize text by replacing custom font characters with standard ones
-const sanitizeText = (text) => {
-    // This is a simple but effective way to handle some common custom font styles.
-    // It maps characters from various Unicode ranges back to their ASCII equivalents.
-    // We'll focus on a few common styles for now.
-    let sanitizedText = text;
-
-    // Bold, Italic, and other stylistic letters
-    sanitizedText = sanitizedText.replace(/[\u{1D400}-\u{1D7FF}]/gu, (char) => {
-        const codePoint = char.codePointAt(0);
-        // A, B, C...
-        if (codePoint >= 0x1d434 && codePoint <= 0x1d467) return String.fromCodePoint(codePoint - 0x1d434 + 65);
-        // a, b, c...
-        if (codePoint >= 0x1d468 && codePoint <= 0x1d49B) return String.fromCodePoint(codePoint - 0x1d468 + 97);
-        // A, B, C... (italic)
-        if (codePoint >= 0x1d49c && codePoint <= 0x1d4cf) return String.fromCodePoint(codePoint - 0x1d49c + 65);
-        // a, b, c... (italic)
-        if (codePoint >= 0x1d4d0 && codePoint <= 0x1d503) return String.fromCodePoint(codePoint - 0x1d4d0 + 97);
-        // and so on for other styles...
-        return char;
-    });
-
-    // Cursive/Gothic fonts like 𝕮𝖔𝖈𝖆𝖎𝖓𝖊 𝖕𝖆𝖕𝖎
-    const gothicMap = {
-        '𝕬': 'A', '𝕭': 'B', '𝕮': 'C', '𝕯': 'D', '𝕰': 'E', '𝕱': 'F', '𝕲': 'G', '𝕳': 'H', '𝕴': 'I', '𝕵': 'J', '𝕶': 'K', '𝕷': 'L', '𝕸': 'M', '𝕹': 'N', '𝕺': 'O', '𝕻': 'P', '𝕼': 'Q', '𝕽': 'R', '𝕾': 'S', '𝕿': 'T', '𝖀': 'U', '𝖁': 'V', '𝖂': 'W', '𝖃': 'X', '𝖄': 'Y', '𝖅': 'Z',
-        '𝖆': 'a', '𝖇': 'b', '𝖈': 'c', '𝖉': 'd', '𝖊': 'e', '𝖋': 'f', '𝖌': 'g', '𝖍': 'h', '𝖎': 'i', '𝖏': 'j', '𝖐': 'k', '𝖑': 'l', '𝖒': 'm', '𝖓': 'n', '𝖔': 'o', '𝖕': 'p', '𝖖': 'q', '𝖗': 'r', '𝖘': 's', '𝖙': 't', '𝖚': 'u', '𝖛': 'v', '𝖜': 'w', '𝖝': 'x', '𝖞': 'y', '𝖟': 'z'
-    };
-    for (const [key, value] of Object.entries(gothicMap)) {
-        sanitizedText = sanitizedText.replaceAll(key, value);
-    }
-
-    return sanitizedText;
-};
-
+const {
+    SlashCommandBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    EmbedBuilder,
+    MessageFlags,
+    AttachmentBuilder
+} = require('discord.js');
+const mongoose = require('mongoose');
+const Relationship = require('../../Schemas.js/relationshipSchema');
+const { handleFamilyTreeCommand } = require('./familyTree');
+const { createCanvas, loadImage } = require('canvas');
 
 module.exports = {
-    // Define the slash command using SlashCommandBuilder
     data: new SlashCommandBuilder()
         .setName('relationships')
         .setDescription('Manage your relationships in the server')
-        // Propose subcommand: Allows a user to propose marriage to another user
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('propose')
-                .setDescription('Propose marriage to another user. 💍')
-                .addUserOption(option =>
-                    option.setName('target')
-                        .setDescription('The user you want to propose to.')
-                        .setRequired(true)))
-        // Divorce subcommand: Allows a user to divorce a specific partner
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('divorce')
-                .setDescription('Divorce your spouse')
-                .addStringOption(option =>
-                    option.setName('custody')
-                        .setDescription('Do you want custody of all adopted children?')
-                        .addChoices(
-                            { name: 'Yes', value: 'yes' },
-                            { name: 'No', value: 'no' }
-                        )
-                        .setRequired(false)
-                )
+        // --- Subcommands (same as original funny version) ---
+        .addSubcommand(subcommand => 
+            subcommand.setName('propose')
+            .setDescription('Propose marriage to another user. 💍')
+            .addUserOption(o => 
+                o.setName('target')
+                .setDescription('The user you want to propose to.')
+                .setRequired(true)
+            )
         )
-        // Marriage certificate command
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('marriage-certificate')
-                .setDescription('View your marriage certificate or someone else\'s.')
-                .addUserOption(option =>
-                    option.setName('user')
-                        .setDescription('The user to view the marriage certificate for.')
-                        .setRequired(false)
+        .addSubcommand(subcommand => 
+            subcommand.setName('divorce')
+            .setDescription('Divorce your spouse')
+            .addStringOption(o => 
+                o.setName('custody')
+                .setDescription('Do you want custody of all adopted children?')
+                .addChoices(
+                    { name: 'Yes', value: 'yes' }, 
+                    { name: 'No', value: 'no' }
                 )
+                .setRequired(false)
+            )
         )
-        // Divorceall subcommand: Allows a user to divorce all partners
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('divorceall')
-                .setDescription('Divorce all your partners. 🥀💔💔'))
-        // Adopt subcommand: Allows a user to adopt another user
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('adopt')
-                .setDescription('Adopt another user as your child. 👶')
-                .addUserOption(option =>
-                    option.setName('target')
-                        .setDescription('The user you want to adopt.')
-                        .setRequired(true)))
-        // Disown subcommand: Allows a user to disown an adopted child
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('disown')
-                .setDescription('Disown one of your adopted children. 🚶‍♀️')
-                .addUserOption(option =>
-                    option.setName('target')
-                        .setDescription('The child you want to disown.')
-                        .setRequired(true)))
-        // Disownall subcommand: Allows a user to disown all adopted children
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('disownall')
-                .setDescription('Disown all your adopted children. 🚶‍♀️🚶‍♂️'))
-        // Hug subcommand: Simple interaction
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('hug')
-                .setDescription('Give another user a hug! 🤗... you fucking weirdo..')
-                .addUserOption(option =>
-                    option.setName('target')
-                        .setDescription('The user you want to hug.')
-                        .setRequired(true)))
-        // Kiss subcommand: Simple interaction
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('kiss')
-                .setDescription('Give another user a kiss! 💋... wow... you really are desparate')
-                .addUserOption(option =>
-                    option.setName('target')
-                        .setDescription('The user you want to kiss.')
-                        .setRequired(true)))
-        // Slap subcommand: Simple interaction
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('slap')
-                .setDescription('Slap another user! 👋.. they deserve it.')
-                .addUserOption(option =>
-                    option.setName('target')
-                        .setDescription('The user you want to slap.')
-                        .setRequired(true)))
-        
-        .addSubcommand( subcommand =>
+        .addSubcommand(subcommand => 
+            subcommand.setName('divorceall')
+            .setDescription('Divorce all your partners. 🥀💔💔')
+        )
+        .addSubcommand(subcommand => 
+            subcommand.setName('adopt')
+            .setDescription('Adopt another user as your child. 👶')
+            .addUserOption(o => 
+                o.setName('target')
+                .setDescription('The user you want to adopt.')
+                .setRequired(true)
+            )
+        )
+        .addSubcommand(subcommand => 
+            subcommand.setName('disown')
+            .setDescription('Disown one of your adopted children. 🚶‍♀️')
+            .addUserOption(o => 
+                o.setName('target')
+                .setDescription('The child you want to disown.').setRequired(true)
+            )
+        )
+        .addSubcommand(subcommand => 
+            subcommand.setName('disownall')
+            .setDescription('Disown all your adopted children. 🚶‍♀️🚶‍♂️')
+        )
+        .addSubcommand(subcommand => 
+            subcommand.setName('hug')
+            .setDescription('Give another user a hug! 🤗... you fucking weirdo..')
+            .addUserOption(o => 
+                o.setName('target')
+                .setDescription('The user you want to hug.')
+                .setRequired(true)
+            )
+        )
+        .addSubcommand(subcommand => 
+            subcommand.setName('kiss')
+            .setDescription('Give another user a kiss! 💋... wow... you really are desparate')
+            .addUserOption(o => 
+                o.setName('target')
+                .setDescription('The user you want to kiss.')
+                .setRequired(true)
+            )
+        )
+        .addSubcommand(subcommand => 
+            subcommand.setName('slap')
+            .setDescription('Slap another user! 👋.. they deserve it.')
+            .addUserOption(o => 
+                o.setName('target')
+                .setDescription('The user you want to slap.')
+                .setRequired(true)
+            )
+        )
+        .addSubcommand(subcommand => 
             subcommand.setName('touch')
             .setDescription('Touches another user... inappropriately.😈')
-            .addUserOption( option =>
-                option.setName('target')
+            .addUserOption(o => 
+                o.setName('target')
                 .setDescription('User you want to touch.')
                 .setRequired(true)
             )
         )
-        .addSubcommand( subcommand =>
+        .addSubcommand(subcommand => 
             subcommand.setName('cuddle')
             .setDescription('Cuddles another user... while fully erect ofc😌')
-            .addUserOption( option =>
-                option.setName('target')
+            .addUserOption(o => 
+                o.setName('target')
                 .setDescription('User you want to cuddle with.')
                 .setRequired(true)
             )
         )
-        // New user commands
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('runaway')
-                .setDescription('Abandon all your spouses, children, and parents. 🏃‍♀️'))
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('ask-to-be-parent')
-                .setDescription('Ask another user to adopt you. 🥺')
-                .addUserOption(option =>
-                    option.setName('target')
-                        .setDescription('The user you want to ask to adopt you.')
-                        .setRequired(true)))
-        // Family Tree subcommand: Visualize the family tree
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('familytree')
-                .setDescription('Generate a visual family tree for yourself or another user. 👨‍👩‍👧‍👦')
-                .addUserOption(option =>
-                    option.setName('user')
-                        .setDescription('The user to view the family tree for.')
-                        .setRequired(false)))
-        // Admin-only subcommands group
-        .addSubcommandGroup(group =>
-            group
-                .setName('admin')
-                .setDescription('Admin-only relationship management commands.')
-                .addSubcommand(subcommand =>
-                    subcommand
-                        .setName('force-marry')
-                        .setDescription('[ADMIN] Force a marriage between two users.')
-                        .addUserOption(option =>
-                            option.setName('user1')
-                                .setDescription('The first user.')
-                                .setRequired(true))
-                        .addUserOption(option =>
-                            option.setName('user2')
-                                .setDescription('The second user.')
-                                .setRequired(true)))
-                .addSubcommand(subcommand =>
-                    subcommand
-                        .setName('force-divorce')
-                        .setDescription('[ADMIN] Force a divorce between two users.')
-                        .addUserOption(option =>
-                            option.setName('user1')
-                                .setDescription('The first user.')
-                                .setRequired(true))
-                        .addUserOption(option =>
-                            option.setName('user2')
-                                .setDescription('The second user.')
-                                .setRequired(true)))
-                .addSubcommand(subcommand =>
-                    subcommand
-                        .setName('force-adopt')
-                        .setDescription('[ADMIN] Force a user to adopt another.')
-                        .addUserOption(option =>
-                            option.setName('parent')
-                                .setDescription('The user who will be the parent.')
-                                .setRequired(true))
-                        .addUserOption(option =>
-                            option.setName('child')
-                                .setDescription('The user who will be the child.')
-                                .setRequired(true)))
-                .addSubcommand(subcommand =>
-                    subcommand
-                        .setName('force-disown')
-                        .setDescription('[ADMIN] Force a user to disown a child.')
-                        .addUserOption(option =>
-                            option.setName('parent')
-                                .setDescription('The user who will disown the child.')
-                                .setRequired(true))
-                        .addUserOption(option =>
-                            option.setName('child')
-                                .setDescription('The user who will be disowned.')
-                                .setRequired(true))))
-    ,
-    // The execute function runs when the command is called
+        .addSubcommand(subcommand => 
+            subcommand.setName('runaway')
+            .setDescription('Abandon all your spouses, children, and parents. 🏃‍♀️')
+        )
+        .addSubcommand(subcommand => 
+            subcommand.setName('ask-to-be-parent')
+            .setDescription('Ask another user to adopt you. 🥺')
+            .addUserOption(o => 
+                o.setName('target')
+                .setDescription('The user you want to ask to adopt you.')
+                .setRequired(true)
+            )
+        )
+        .addSubcommand(subcommand => 
+            subcommand.setName('familytree')
+            .setDescription('Generate a visual family tree for yourself or another user. 👨‍👩‍👧‍👦')
+            .addUserOption(o => 
+                o.setName('user')
+                .setDescription('The user to view the family tree for.')
+                .setRequired(false)
+            )
+        )
+        .addSubcommandGroup(group => 
+            group.setName('admin')
+            .setDescription('Admin-only relationship management commands.')
+            .addSubcommand(sc => 
+                sc.setName('force-marry')
+                .setDescription('[ADMIN] Force a marriage between two users.')
+                .addUserOption(o => 
+                    o.setName('user1')
+                    .setDescription('The first user.')
+                    .setRequired(true)
+                )
+                .addUserOption(o => 
+                    o.setName('user2')
+                    .setDescription('The second user.')
+                    .setRequired(true)
+                )
+            )
+            .addSubcommand(sc => 
+                sc.setName('force-divorce')
+                .setDescription('[ADMIN] Force a divorce between two users.')
+                .addUserOption(o => 
+                    o.setName('user1')
+                    .setDescription('The first user.')
+                    .setRequired(true)
+                )
+                .addUserOption(o => 
+                    o.setName('user2')
+                    .setDescription('The second user.')
+                    .setRequired(true)
+                )
+            )
+            .addSubcommand(sc => 
+                sc.setName('force-adopt')
+                .setDescription('[ADMIN] Force a user to adopt another.')
+                .addUserOption(o => 
+                    o.setName('parent')
+                    .setDescription('The parent.')
+                    .setRequired(true)
+                )
+                .addUserOption(o => 
+                    o.setName('child')
+                    .setDescription('The child.')
+                    .setRequired(true)
+                )
+            )
+            .addSubcommand(sc => 
+                sc.setName('force-disown')
+                .setDescription('[ADMIN] Force a user to disown a child.')
+                .addUserOption(o => 
+                    o.setName('parent')
+                    .setDescription('The parent.')
+                    .setRequired(true)
+                )
+                .addUserOption(o => 
+                    o.setName('child')
+                    .setDescription('The child.')
+                    .setRequired(true)
+                )
+            )
+        )
+        .addSubcommand(subcommand => 
+            subcommand.setName('marriage-certificate')
+            .setDescription('View your marriage certificate or someone else\'s.')
+            .addUserOption(o => 
+                o.setName('user')
+                .setDescription('The user to view the marriage certificate for.')
+                .setRequired(false)
+            )
+        ),
+
     async execute(interaction) {
-        // Check if MongoDB is connected before proceeding
         if (mongoose.connection.readyState !== 1) {
             await interaction.reply({ content: '❌ Database is not connected. Please try again later.', flags: MessageFlags.Ephemeral });
             return;
         }
 
+        const subcommand = interaction.options.getSubcommand();
+
         const RoleID = '1380459360207114341';
         const AgeRoleID = '1379700883398332497';
         const MaleRoleId = '1379632668689563678';
         const FemaleRoleId = '1379632424962621511';
-        const subcommand = interaction.options.getSubcommand();
         const initiator = interaction.member; // The user who ran the command
         const target = interaction.options.getMember('target'); // The target user for the subcommand
         let targetAvatar = target?.displayAvatarURL({ dynamic: true, format: 'png', size: 1024 });
@@ -263,33 +223,11 @@ module.exports = {
             return interaction.reply({ content: 'I dont think this is what they meant by love yourself...', flags: MessageFlags.Ephemeral });
         }
 
-        // Helper function to check if two users are currently married
-        const areMarried = async (user1Id, user2Id) => {
-            const marriage = await Relationship.findOne({
-                type: 'marriage',
-                status: 'accepted',
-                $or: [
-                    { initiatorId: user1Id, targetId: user2Id },
-                    { initiatorId: user2Id, targetId: user1Id }
-                ]
-            });
-            return !!marriage;
-        };
-
-        // Helper function to check if a user is a parent of another (adoption)
-        const isParentOf = async (parentId, childId) => {
-            const adoption = await Relationship.findOne({
-                type: 'adoption',
-                status: 'accepted',
-                initiatorId: parentId,
-                targetId: childId
-            });
-            return !!adoption;
-        };
-
-        // Handle different subcommands
         switch (subcommand) {
-
+            case 'familytree': {
+                await handleFamilyTreeCommand(interaction);
+                break;
+            }
             case 'propose':
                 {
                     // Check for existing pending proposals between the two users
@@ -566,7 +504,7 @@ module.exports = {
                         targetId: target.id
                     });
                     if (existingAdoption) {
-                         return interaction.reply({ content: `**🚫 ${target.displayName} has already been adopted by someone else.**`, flags: MessageFlags.Ephemeral });
+                            return interaction.reply({ content: `**🚫 ${target.displayName} has already been adopted by someone else.**`, flags: MessageFlags.Ephemeral });
                     }
 
                     // Create a new adoption relationship (accepted immediately for simplicity)
@@ -1109,279 +1047,6 @@ module.exports = {
                     break;
                 }
 
-            case 'familytree': {
-                    await interaction.deferReply();
-                    const targetUser = interaction.options.getUser('user') || interaction.user;
-                    const guild = interaction.guild;
-
-                    const sanitizeText = (text) => text.replace(/[^a-zA-Z0-9 ]/g, '');
-
-                    // --- Find Family Root ---
-                    let rootUserId = targetUser.id;
-                    let currentUserId = targetUser.id;
-                    let hasParents = true;
-
-                    while (hasParents) {
-                        const parentRelationship = await Relationship.findOne({
-                            type: 'adoption',
-                            status: 'accepted',
-                            targetId: currentUserId
-                        });
-                        if (parentRelationship) {
-                            currentUserId = parentRelationship.initiatorId;
-                            rootUserId = currentUserId;
-                        } else {
-                            hasParents = false;
-                        }
-                    }
-
-                    // --- Build Family Tree ---
-                    const familyTree = new Map();
-                    const queue = [rootUserId];
-                    const visited = new Set();
-
-                    while (queue.length > 0) {
-                        const userId = queue.shift();
-                        if (visited.has(userId)) continue;
-                        visited.add(userId);
-
-                        const userRelationships = await Relationship.find({
-                            $or: [
-                                { initiatorId: userId },
-                                { targetId: userId }
-                            ],
-                            status: 'accepted'
-                        });
-
-                        const childrenIds = new Set();
-                        const spouseIds = new Set();
-                        const parentIds = new Set();
-
-                        for (const rel of userRelationships) {
-                            if (rel.type === 'adoption') {
-                                if (rel.initiatorId === userId) {
-                                    childrenIds.add(rel.targetId);
-                                    if (!visited.has(rel.targetId)) queue.push(rel.targetId);
-                                } else if (rel.targetId === userId) {
-                                    parentIds.add(rel.initiatorId);
-                                    if (!visited.has(rel.initiatorId)) queue.push(rel.initiatorId);
-                                }
-                            } else if (rel.type === 'marriage') {
-                                const spouseId = rel.initiatorId === userId ? rel.targetId : rel.initiatorId;
-                                spouseIds.add(spouseId);
-                                if (!visited.has(spouseId)) queue.push(spouseId);
-                            }
-                        }
-
-                        familyTree.set(userId, {
-                            children: Array.from(childrenIds),
-                            spouses: Array.from(spouseIds),
-                            parents: Array.from(parentIds)
-                        });
-                    }
-
-                    // --- Helper functions to get relatives ---
-                    const getAllAncestors = (id, set = new Set()) => {
-                        const node = familyTree.get(id);
-                        if (!node) return set;
-                        for (const parentId of node.parents) {
-                            if (!set.has(parentId)) {
-                                set.add(parentId);
-                                getAllAncestors(parentId, set);
-                            }
-                        }
-                        return set;
-                    };
-
-                    const getAllDescendants = (id, set = new Set()) => {
-                        const node = familyTree.get(id);
-                        if (!node) return set;
-                        for (const childId of node.children) {
-                            if (!set.has(childId)) {
-                                set.add(childId);
-                                getAllDescendants(childId, set);
-                            }
-                        }
-                        return set;
-                    };
-
-                    // --- Detect incest and prepare cut list ---
-                    const incestPairs = new Set();
-                    const incestMembers = new Set();
-                    const cutChildLinks = [];
-
-                    const marriages = await Relationship.find({ type: 'marriage', status: 'accepted' });
-
-                    for (const marriage of marriages) {
-                        const { initiatorId, targetId } = marriage;
-                        const initiatorAncestors = getAllAncestors(initiatorId);
-                        const initiatorDescendants = getAllDescendants(initiatorId);
-
-                        if (initiatorAncestors.has(targetId) || initiatorDescendants.has(targetId)) {
-                            const key = [initiatorId, targetId].sort().join('-');
-                            incestPairs.add(key);
-                            incestMembers.add(initiatorId);
-                            incestMembers.add(targetId);
-
-                            // Decide which child link to cut
-                            if (initiatorAncestors.has(targetId)) {
-                                // Target is descendant → target moves up → cut target's old parent link
-                                const targetNode = familyTree.get(targetId);
-                                if (targetNode && targetNode.parents.length > 0) {
-                                    cutChildLinks.push({ parentId: targetNode.parents[0], childId: targetId });
-                                }
-                            } else if (initiatorDescendants.has(targetId)) {
-                                // Target is ancestor → target moves down → cut target's link to old child
-                                const targetNode = familyTree.get(targetId);
-                                if (targetNode && targetNode.children.length > 0) {
-                                    cutChildLinks.push({ parentId: targetId, childId: targetNode.children[0] });
-                                }
-                            }
-                        }
-                    }
-
-                    const isIncest = (id1, id2) => {
-                        const key = [id1, id2].sort().join('-');
-                        return incestPairs.has(key);
-                    };
-
-                    const shouldCutLink = (parentId, childId) =>
-                        cutChildLinks.some(link => link.parentId === parentId && link.childId === childId);
-
-                    // --- Canvas Layout ---
-                    const pfpSize = 80;
-                    const gap = 40;
-                    const userPositions = new Map();
-                    let finalWidth = 0;
-                    let finalHeight = 0;
-
-                    const calculateSubtreeWidth = (userId) => {
-                        const node = familyTree.get(userId);
-                        if (!node) return pfpSize;
-                        const childrenWidths = node.children.map(childId => calculateSubtreeWidth(childId));
-                        let childrenTotalWidth = childrenWidths.reduce((sum, width) => sum + width + gap, 0);
-                        childrenTotalWidth = Math.max(0, childrenTotalWidth - gap);
-                        const selfWidth = (node.spouses.length + 1) * (pfpSize + gap) - gap;
-                        return Math.max(selfWidth, childrenTotalWidth);
-                    };
-
-                    const positionSubtree = (userId, y, x) => {
-                        const node = familyTree.get(userId);
-                        if (!node) {
-                            userPositions.set(userId, { x, y });
-                            finalHeight = Math.max(finalHeight, y + pfpSize + 25 + gap);
-                            finalWidth = Math.max(finalWidth, x + pfpSize);
-                            return x + pfpSize + gap;
-                        }
-                        const selfWidth = (node.spouses.length + 1) * (pfpSize + gap) - gap;
-                        const childrenWidths = node.children.map(childId => calculateSubtreeWidth(childId));
-                        const childrenTotalWidth = childrenWidths.reduce((sum, width) => sum + width + gap, 0) - gap;
-                        const totalSubtreeWidth = Math.max(selfWidth, childrenTotalWidth);
-
-                        const parentBlockStartX = x + (totalSubtreeWidth - selfWidth) / 2;
-                        let spouseX = parentBlockStartX;
-                        userPositions.set(userId, { x: spouseX, y: y });
-                        finalHeight = Math.max(finalHeight, y + pfpSize + 25 + gap);
-
-                        for (const spouseId of node.spouses) {
-                            spouseX += pfpSize + gap;
-                            userPositions.set(spouseId, { x: spouseX, y: y });
-                        }
-
-                        let currentChildX = x + (totalSubtreeWidth - childrenTotalWidth) / 2;
-                        for (let i = 0; i < node.children.length; i++) {
-                            const childId = node.children[i];
-                            const childWidth = childrenWidths[i];
-                            positionSubtree(childId, y + pfpSize + gap * 3, currentChildX);
-                            currentChildX += childWidth + gap;
-                        }
-                        finalWidth = Math.max(finalWidth, x + totalSubtreeWidth);
-                        return x + totalSubtreeWidth + gap;
-                    };
-
-                    // --- Drawing ---
-                    const drawUser = async (context, member, pos) => {
-                        try {
-                            const pfp = await loadImage(member.displayAvatarURL({ extension: 'png' }));
-                            context.drawImage(pfp, pos.x, pos.y, pfpSize, pfpSize);
-                            if (incestMembers.has(member.id)) {
-                                context.strokeStyle = 'red';
-                                context.lineWidth = 5;
-                                context.strokeRect(pos.x, pos.y, pfpSize, pfpSize);
-                            }
-                        } catch (error) {
-                            console.error(`Failed to load avatar for user ${member.id}:`, error);
-                        }
-                        context.fillStyle = '#FFFFFF';
-                        context.font = '24px sans-serif';
-                        context.textAlign = 'center';
-                        context.fillText(sanitizeText(member.displayName), pos.x + pfpSize / 2, pos.y + pfpSize + 25);
-                    };
-
-                    const drawTree = async (context, guild) => {
-                        context.lineWidth = 3;
-                        for (const [userId, node] of familyTree.entries()) {
-                            const userPos = userPositions.get(userId);
-                            if (!userPos) continue;
-
-                            // Marriage lines
-                            context.strokeStyle = '#FF69B4';
-                            for (const spouseId of node.spouses) {
-                                const spousePos = userPositions.get(spouseId);
-                                if (spousePos && userPos.x < spousePos.x) {
-                                    context.beginPath();
-                                    context.moveTo(userPos.x + pfpSize, userPos.y + pfpSize / 2);
-                                    context.lineTo(spousePos.x, spousePos.y + pfpSize / 2);
-                                    context.stroke();
-                                }
-                            }
-
-                            // Child lines
-                            context.strokeStyle = '#90EE90';
-                            for (const childId of node.children) {
-                                if (shouldCutLink(userId, childId)) continue; // skip cut link
-                                const childPos = userPositions.get(childId);
-                                if (childPos) {
-                                    context.beginPath();
-                                    context.moveTo(userPos.x + pfpSize / 2, userPos.y + pfpSize);
-                                    context.lineTo(childPos.x + pfpSize / 2, childPos.y);
-                                    context.stroke();
-                                }
-                            }
-                        }
-
-                        // Draw avatars last
-                        for (const [userId, pos] of userPositions.entries()) {
-                            const member = guild.members.cache.get(userId);
-                            if (!member) continue;
-                            await drawUser(context, member, pos);
-                        }
-                    };
-
-                    // --- Render ---
-                    const rootMember = guild.members.cache.get(rootUserId);
-                    if (rootMember) {
-                        calculateSubtreeWidth(rootUserId);
-                        positionSubtree(rootUserId, 50, 50);
-                        const finalCanvas = createCanvas(finalWidth + 100, finalHeight + 50);
-                        const finalContext = finalCanvas.getContext('2d');
-                        finalContext.fillStyle = '#2f3136';
-                        finalContext.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
-                        await drawTree(finalContext, guild);
-                        const buffer = finalCanvas.toBuffer('image/png');
-                        const attachment = new AttachmentBuilder(buffer, { name: 'family-tree.png' });
-                        const familyTreeEmbed = new EmbedBuilder()
-                            .setTitle(`👨‍👩‍👧‍👦 ${sanitizeText(rootMember.displayName)}'s Family Tree 👨‍👩‍👧‍👦`)
-                            .setImage('attachment://family-tree.png')
-                            .setColor('#4890ff')
-                            .setTimestamp();
-                        await interaction.editReply({ embeds: [familyTreeEmbed], files: [attachment] });
-                    } else {
-                        return interaction.editReply({ content: 'Could not find the family root for that user.' });
-                    }
-                    break;
-                }
-
             // Admin-only force commands
             case 'force-marry':
                 {
@@ -1642,6 +1307,7 @@ module.exports = {
                 await interaction.reply({ embeds: [embed], files: [attachment] });
                 break;
             }
+        
         }
 
         async function transferCustody(newParentId, marriage) {

@@ -9,16 +9,18 @@ const path = require('node:path');
 const mongoose = require('mongoose');
 const fetch = require('node-fetch');
 
+const { registerRelationshipEvents } = require('./relationshipEvents');
 
-const express = require('express');
-const app = express();
-app.listen(process.env.PORT || 3000, () => {
-    console.log(`Web server is listening on port ${process.env.PORT || 3000}`);
-});
 
-app.get('/', (req, res) => {
-    res.send("The Discord bot is alive!");
-});
+// const express = require('express');
+// const app = express();
+// app.listen(process.env.PORT || 3000, () => {
+//     console.log(`Web server is listening on port ${process.env.PORT || 3000}`);
+// });
+
+// app.get('/', (req, res) => {
+//     res.send("The Discord bot is alive!");
+// });
 
 const mongoURI = process.env.MONGO_URI;
 
@@ -207,9 +209,10 @@ client.on('ready', async c => {
     } catch (dbError) {
         console.error('Error fetching existing reaction roles from database:', dbError);
     }
-    console.log('Omni Slave is now online');
-
     restoreBumpTimer(client);
+    registerRelationshipEvents(client);
+
+    console.log('Omni Slave is now online');
 });
 
 // New event listener to log messages
