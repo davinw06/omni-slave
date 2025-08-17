@@ -189,35 +189,38 @@ async function handleFamilyTreeCommand(interaction) {
             await drawUser(finalContext, member, pos);
         }
 
-        finalContext.strokeStyle = '#ffffff';
-        finalContext.lineWidth = 2;
-
+        // --- Draw connection lines ---
         for (const [userId, node] of familyTree.entries()) {
             const parentPos = userPositions.get(userId);
             if (!parentPos) continue;
 
-            // Connect spouses
+            // Connect spouses (marriage lines)
             for (const spouseId of node.spouses) {
                 const spousePos = userPositions.get(spouseId);
                 if (!spousePos) continue;
 
                 finalContext.beginPath();
+                finalContext.strokeStyle = '#ff66cc'; // pink line for marriage
+                finalContext.lineWidth = 3;
                 finalContext.moveTo(parentPos.x + pfpSize / 2, parentPos.y + pfpSize / 2);
                 finalContext.lineTo(spousePos.x + pfpSize / 2, spousePos.y + pfpSize / 2);
                 finalContext.stroke();
             }
 
-            // Connect children
+            // Connect children (family tree lines)
             for (const childId of node.children) {
                 const childPos = userPositions.get(childId);
                 if (!childPos) continue;
 
                 finalContext.beginPath();
+                finalContext.strokeStyle = '#ffffff'; // white line for parent-child
+                finalContext.lineWidth = 2;
                 finalContext.moveTo(parentPos.x + pfpSize / 2, parentPos.y + pfpSize);
                 finalContext.lineTo(childPos.x + pfpSize / 2, childPos.y);
                 finalContext.stroke();
             }
         }
+
 
         const buffer = finalCanvas.toBuffer('image/png');
         const attachment = new AttachmentBuilder(buffer, { name: 'family-tree.png' });
