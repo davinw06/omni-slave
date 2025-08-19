@@ -99,6 +99,7 @@ module.exports = {
 
         const avatar = targetUser.displayAvatarURL({ extension: 'png', size: 512 });
         const decoration = targetUser.avatarDecorationURL ? targetUser.avatarDecorationURL({ extension: 'png', size: 512 }) : null ;
+        const AuthorAvatar = interaction.user.displayAvatarURL({ extension: 'png', size: 1024 });
 
         let userAvatar = avatar;
         let attachments = [];
@@ -140,7 +141,7 @@ module.exports = {
             .setThumbnail(userAvatar)
             .setFields(fields)
             .setTimestamp(new Date())
-            .setFooter({text: `Requested by ${interaction.user.displayName}`, icon_url: interaction.user.displayAvatarURL({ dynamic: true })})
+            .setFooter({text: `Requested by ${interaction.user.displayName}`, iconURL: AuthorAvatar })
 
         if (bannerUrl) {
             userEmbed.setImage(bannerUrl);

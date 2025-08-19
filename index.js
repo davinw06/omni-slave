@@ -12,15 +12,15 @@ const fetch = require('node-fetch');
 const { registerRelationshipEvents } = require('./relationshipEvents');
 
 
-const express = require('express');
-const app = express();
-app.listen(process.env.PORT || 3000, () => {
-    console.log(`Web server is listening on port ${process.env.PORT || 3000}`);
-});
+// const express = require('express');
+// const app = express();
+// app.listen(process.env.PORT || 3000, () => {
+//     console.log(`Web server is listening on port ${process.env.PORT || 3000}`);
+// });
 
-app.get('/', (req, res) => {
-    res.send("The Discord bot is alive!");
-});
+// app.get('/', (req, res) => {
+//     res.send("The Discord bot is alive!");
+// });
 
 const mongoURI = process.env.MONGO_URI;
 
@@ -171,10 +171,11 @@ client.on('ready', async c => {
         console.error('Failed to register slash commands:', error);
     }
 
-    console.log('Attempting to re-establish existing reaction roles...');
+    console.log('Attempting to re-establish existing emoji reaction roles...');
     try {
-        const existingReactionRoles = await ReactionRole.find({});
-        console.log(`Found ${existingReactionRoles.length} existing reaction role configurations.`);
+        // Only fetch emoji-based configs
+        const existingReactionRoles = await ReactionRole.find({ type: 'emoji' });
+        console.log(`Found ${existingReactionRoles.length} existing emoji reaction role configurations.`);
 
         for (const rrConfig of existingReactionRoles) {
             try {
@@ -205,10 +206,12 @@ client.on('ready', async c => {
                 }
             }
         }
-        console.log('Finished re-establishing existing reaction roles.');
+
+        console.log('Finished re-establishing emoji reaction roles.');
     } catch (dbError) {
         console.error('Error fetching existing reaction roles from database:', dbError);
     }
+
     restoreBumpTimer(client);
     registerRelationshipEvents(client);
 
@@ -602,6 +605,24 @@ client.on('guildMemberUpdate', (oldMember, newMember) => {
             logChannel.send({ embeds: [embed] });
         }
     }
+    if (!oldMember.premiumSince && newMember.premiumSince) {
+        // Replace with your desired channel ID
+        const boostChannelId = "1406493991267995680"; 
+        const channel = newMember.guild.channels.cache.get(boostChannelId);
+        const memberAvatar = newMember.user.displayAvatarURL({ extension: 'png', size: 1024 });
+
+        const embed = new EmbedBuilder()
+            .setTitle(`***🎉🚀THANK YOU ${newMember.displayName} FOR BOOSING!!🚀🎉***`)
+            .setDescription(`Enjoy the new features added thanks to your spending!!🥂`)
+            .setColor('Gold')
+            .setThumbnail(memberAvatar)
+            .setImage('https://i.imgur.com/3u7b0Kq.png')
+            .setTimestamp();
+
+        if (channel && channel.isTextBased()) {
+            channel.send({ embeds: [embed] });
+        }
+    }
 });
 
 
@@ -621,6 +642,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
         '1404029888574394418': '879863686565621790', // Scrabble
         '1403503076522070197': '1300612940486934591', // Blackjack
         '1405568425685680259': '902271654783242291', // Sketchheads
+        '1403491763217498312': '880218394199220334', // Youtube Watch Together
     };
 
     // Map VC names to activity IDs
