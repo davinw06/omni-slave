@@ -6,14 +6,16 @@ const userSchema = new mongoose.Schema({
     userId: {
         type: String,
         required: true,
-        unique: true // Each user should have only one document
+        unique: true
     },
     messageCount: {
         type: Number,
-        default: 0 // Start the count at 0
+        default: 0
     },
-    // You could add more fields here, like a username, etc.
-    // username: { type: String }
+    active: {
+        type: Boolean,
+        default: true // true = currently in server
+    }
 });
 
 // Export the Mongoose model

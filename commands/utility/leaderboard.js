@@ -21,12 +21,11 @@ module.exports = {
 
         try {
             // Fetch the top 3 users based on messageCount, not by grouping messages.
-            const topUsers = await UserModel.find({ messageCount: { $gt: 0 } })
+            const topUsers = await UserModel.find({ messageCount: { $gt: 0 }, active: true })
                 .sort({ messageCount: -1 })
                 .limit(3);
 
-            // Fetch all users to determine the current user's rank.
-            const allUsers = await UserModel.find({ messageCount: { $gt: 0 } })
+            const allUsers = await UserModel.find({ messageCount: { $gt: 0 }, active: true })
                 .sort({ messageCount: -1 });
 
             // Find the current user's rank and message count.

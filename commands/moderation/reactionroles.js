@@ -125,20 +125,146 @@ module.exports = {
 
         // --- EMOJI SETUP ---
         if (subcommand === 'set-multiple') {
-            // (your existing emoji logic stays here unchanged)
-            // ...
-        }
+            const messageId = interaction.options.getString('message_id');
 
-        // --- EMOJI REMOVE ---
-        else if (subcommand === 'remove') {
-            // (your existing emoji remove logic)
-            // ...
-        }
+            await interaction.deferReply({ ephemeral: true });
 
-        // --- EMOJI REMOVE ALL ---
-        else if (subcommand === 'remove-all') {
-            // (your existing emoji remove-all logic)
-            // ...
+            try {
+                const channel = interaction.channel;
+                const message = await channel.messages.fetch(messageId);
+
+                const botPermissions = interaction.guild.members.me.permissionsIn(channel);
+                if (!botPermissions.has(PermissionsBitField.Flags.AddReactions)) {
+                    return interaction.editReply({ content: 'I need the "Add Reactions" permission to set this up.' });
+                }
+                if (!botPermissions.has(PermissionsBitField.Flags.ManageRoles)) {
+                    return interaction.editReply({ content: 'I need the "Manage Roles" permission to assign roles.' });
+                }
+
+                // Collect emoji/role pairs
+                const reactionRolesToSet = [];
+                for (let i = 1; i <= 20; i++) {
+                    const emoji = interaction.options.getString(`emoji${i}`);
+                    const role = interaction.options.getRole(`role${i}`);
+                    if (emoji && role) {
+                        // Check if role is assignable
+                        if (role.position >= interaction.guild.members.me.roles.highest.position) {
+                            await interaction.followUp({
+                                content: `I cannot assign the role **${role.name}** because it is higher or equal to my highest role. Skipping this role.`,
+                                ephemeral: true
+                            });
+                            continue;
+                        }
+                        reactionRolesToSet.push({ emoji, role });
+                    }
+                }
+
+                if (reactionRolesToSet.length === 0) {
+                    return interaction.editReply({ content: 'You must provide at least one emoji and role pair.', ephemeral: true });
+                }
+
+                let successMessages = [];
+                let failedMessages = [];
+
+                for (const { emoji, role } of reactionRolesToSet) {
+                    try {
+                        // Handle custom vs unicode emoji
+                        const customEmojiMatch = emoji.match(/<a?:(\w+):(\d+)>/);
+                        const emojiToReact = customEmojiMatch ? customEmojiMatch[2] : emoji;
+
+                        await message.react(emojiToReact);
+
+                        await ReactionRole.findOneAndUpdate(
+                            { guildId: interaction.guildId, messageId, emoji },
+                            { guildId: interaction.guildId, messageId, emoji, roleId: role.id },
+                            { upsert: true, new: true }
+                        );
+
+                        successMessages.push(`React with ${emoji} to get the **${role.name}** role.`);
+                    } catch (error) {
+                        console.error(`Error setting reaction role for emoji ${emoji} and role ${role.name}:`, error);
+                        failedMessages.push(`Failed to set up reaction role for emoji ${emoji} and role **${role.name}**. Make sure the emoji is valid.`);
+                    }
+                }
+
+                const replyContent = [
+                    `Successfully updated reaction roles for [this message](${message.url}):`,
+                    ...successMessages,
+                    ...failedMessages
+                ].join('\n');
+
+                await interaction.editReply({ content: replyContent, ephemeral: true });
+
+            } catch (error) {
+                console.error('Error setting reaction role:', error);
+                if (error.code === 10008) {
+                    await interaction.editReply({ content: 'I could not find a message with that ID in this channel.' });
+                } else if (error.code === 50001) {
+                    await interaction.editReply({ content: 'I do not have the required permissions to perform this action.' });
+                } else {
+                    await interaction.editReply({ content: 'There was an error while setting the reaction role. Please check the message ID and emojis, and ensure I have the necessary permissions (Manage Roles, Add Reactions).' });
+                }
+            }
+
+        } else if (subcommand === 'remove') {
+            const messageId = interaction.options.getString('message_id');
+            const emoji = interaction.options.getString('emoji');
+
+            await interaction.deferReply({ ephemeral: true });
+
+            try {
+                const deleted = await ReactionRole.deleteOne({
+                    guildId: interaction.guildId,
+                    messageId,
+                    emoji
+                });
+
+                if (deleted.deletedCount > 0) {
+                    await interaction.editReply({ content: `Successfully removed the reaction role for message ID \`${messageId}\` with emoji ${emoji}.` });
+                } else {
+                    await interaction.editReply({ content: `No reaction role found for message ID \`${messageId}\` with emoji ${emoji}.` });
+                }
+
+            } catch (error) {
+                console.error('Error removing reaction role:', error);
+                await interaction.editReply({ content: 'There was an error removing the reaction role. Please try again later.' });
+            }
+        } else if (subcommand === 'remove-all') {
+            const messageId = interaction.options.getString('message_id');
+            await interaction.deferReply({ ephemeral: true });
+
+            try {
+                const message = await interaction.channel.messages.fetch(messageId);
+
+                const deletedDbEntries = await ReactionRole.deleteMany({
+                    guildId: interaction.guildId,
+                    messageId
+                });
+
+                const botPermissions = interaction.guild.members.me.permissionsIn(interaction.channel);
+                if (!botPermissions.has(PermissionsBitField.Flags.ManageMessages)) {
+                    await interaction.editReply({ 
+                        content: `I need the "Manage Messages" permission to remove reactions. I have, however, deleted ${deletedDbEntries.deletedCount} database entries for this message.`,
+                        ephemeral: true
+                    });
+                    return;
+                }
+
+                await message.reactions.removeAll();
+
+                await interaction.editReply({
+                    content: `Successfully removed all reaction roles from the database and cleared all reactions from the message with ID \`${messageId}\`. A total of ${deletedDbEntries.deletedCount} database entries were removed.`,
+                    ephemeral: true
+                });
+
+            } catch (error) {
+                console.error('Error removing all reaction roles:', error);
+                if (error.code === 10008) {
+                    await interaction.editReply({ content: 'I could not find a message with that ID in this channel.' });
+                } else {
+                    await interaction.editReply({ content: 'There was an error while trying to remove all reaction roles. Please check the message ID and my permissions.' });
+                }
+            }
         }
 
         // --- DROPDOWN CREATE ---

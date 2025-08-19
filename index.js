@@ -211,6 +211,43 @@ client.on('ready', async c => {
     } catch (dbError) {
         console.error('Error fetching existing reaction roles from database:', dbError);
     }
+    const BOOSTER_ROLE_ID = '1407104032740212766';
+    const guild = client.guilds.cache.get(guildId); // ✅ use string from .env
+
+    if (!guild) return console.error("Guild not found!");
+
+    try {
+        // Fetch all members to make sure we don’t miss anyone
+        await guild.members.fetch();
+
+        const boostRole = guild.roles.cache.get(BOOSTER_ROLE_ID);
+        if (!boostRole) return console.error("Booster role not found!");
+
+        guild.members.cache.forEach(async (member) => {
+            // If they are boosting, make sure they have the role
+            if (member.premiumSince && !member.roles.cache.has(BOOSTER_ROLE_ID)) {
+                try {
+                    await member.roles.add(boostRole);
+                    console.log(`Gave booster role to ${member.user.tag}`);
+                } catch (err) {
+                    console.error(`Failed to add booster role to ${member.user.tag}:`, err);
+                }
+            }
+
+            // If they are NOT boosting but still have the role, remove it
+            if (!member.premiumSince && member.roles.cache.has(BOOSTER_ROLE_ID)) {
+                try {
+                    await member.roles.remove(boostRole);
+                    console.log(`Removed booster role from ${member.user.tag}`);
+                } catch (err) {
+                    console.error(`Failed to remove booster role from ${member.user.tag}:`, err);
+                }
+            }
+        });
+
+    } catch (err) {
+        console.error("Error syncing booster roles:", err);
+    }
 
     restoreBumpTimer(client);
     registerRelationshipEvents(client);
@@ -226,15 +263,13 @@ client.on(Events.MessageCreate, async message => {
     const userId = message.author.id;
 
     try {
-        // Find the user and increment their messageCount.
-        // `upsert: true` will create a new user document if one doesn't exist.
-        await userSchema.findOneAndUpdate(
-            { userId: userId },
-            { $inc: { messageCount: 1 } },
-            { upsert: true }
+        await UserModel.findOneAndUpdate(
+            { userId: message.author.id },
+            { $inc: { messageCount: 1 } }, // increment messageCount
+            { upsert: true, new: true }   // create if doesn’t exist
         );
     } catch (error) {
-        console.error('Error updating message count:', error);
+        console.error("Error updating message count:", error);
     }
     const stickyData = await StickyMessage.findOne({ guildId: message.guild.id, channelId: message.channel.id });
     
@@ -503,6 +538,15 @@ client.on(Events.InteractionCreate, async interaction => {
 client.on('guildMemberAdd', async member => {
     const welcomeChannel = member.guild.channels.cache.get(WELCOME_CHANNEL_ID);
     const loggingChannel = member.guild.channels.cache.get(LOGGING_CHANNEL_ID);
+    try {
+        await UserModel.updateOne(
+            { userId: member.id },
+            { $set: { active: true } }
+        );
+        console.log(`✅ Restored stats for ${member.user.tag}`);
+    } catch (error) {
+        console.error(`❌ Failed to restore stats for ${member.id}:`, error);
+    }
     if (!welcomeChannel) return;
     let welcomeEmbed = new EmbedBuilder()
         .setImage('https://i.imgur.com/KQxfKhA.png');
@@ -525,6 +569,15 @@ client.on('guildMemberRemove', async member => {
     const farewellChannel = member.guild.channels.cache.get(FAREWELL_CHANNEL_ID);
     const loggingChannel = member.guild.channels.cache.get(LOGGING_CHANNEL_ID);
     if (!farewellChannel) return;
+    try {
+        await UserModel.updateOne(
+            { userId: member.id },
+            { $set: { active: false } }
+        );
+        console.log(`⚠️ Archived stats for ${member.user.tag}`);
+    } catch (error) {
+        console.error(`❌ Failed to archive stats for ${member.id}:`, error);
+    }
     try {
         const auditLogs = await member.guild.fetchAuditLogs({
             limit: 1,
@@ -576,7 +629,7 @@ client.on('guildMemberRemove', async member => {
     }
 });
 
-client.on('guildMemberUpdate', (oldMember, newMember) => {
+client.on('guildMemberUpdate', async (oldMember, newMember) => {
     if (oldMember.communicationDisabledUntilTimestamp !== newMember.communicationDisabledUntilTimestamp) {
         const logChannel = newMember.guild.channels.cache.get(LOGGING_CHANNEL_ID);
         if (!logChannel) return;
@@ -586,7 +639,7 @@ client.on('guildMemberUpdate', (oldMember, newMember) => {
                 .setTitle('Member Timed Out')
                 .setDescription(`${newMember.user.tag} has been timed out.`)
                 .addFields(
-                    { name: 'User', value: newMember.displayName+`(${newMember.tag})`  },
+                    { name: 'User', value: newMember.displayName+`(${newMember.user.tag})`  },
                     { name: 'Until', value: `<t:${Math.floor(newMember.communicationDisabledUntilTimestamp / 1000)}:F>`}
                 )
                 .setThumbnail(newMember.user.displayAvatarURL({ size: 1024 }))
@@ -605,22 +658,66 @@ client.on('guildMemberUpdate', (oldMember, newMember) => {
             logChannel.send({ embeds: [embed] });
         }
     }
+    const BOOSTER_ROLE_ID = '1407104032740212766';
+    const boostRole = newMember.guild.roles.cache.get(BOOSTER_ROLE_ID);
+    const boostChannelId = "1406493991267995680"; 
+    const boostChannel = newMember.guild.channels.cache.get(boostChannelId);
+    const logChannel = newMember.guild.channels.cache.get(LOGGING_CHANNEL_ID);
+
+    // --- BOOST START ---
     if (!oldMember.premiumSince && newMember.premiumSince) {
-        // Replace with your desired channel ID
-        const boostChannelId = "1406493991267995680"; 
-        const channel = newMember.guild.channels.cache.get(boostChannelId);
+        try {
+            if (boostRole) {
+                await newMember.roles.add(boostRole);
+            }
+        } catch (er) {
+            console.error('Could not give role to member', er);
+        }
+
         const memberAvatar = newMember.user.displayAvatarURL({ extension: 'png', size: 1024 });
 
-        const embed = new EmbedBuilder()
-            .setTitle(`***🎉🚀THANK YOU ${newMember.displayName} FOR BOOSING!!🚀🎉***`)
-            .setDescription(`Enjoy the new features added thanks to your spending!!🥂`)
+        const publicEmbed = new EmbedBuilder()
+            .setTitle(`***🎉🚀 THANK YOU ${newMember.displayName} FOR BOOSTING!! 🚀🎉***`)
+            .setDescription(`Enjoy the new features added thanks to your support! 🥂`)
             .setColor('Gold')
             .setThumbnail(memberAvatar)
             .setImage('https://i.imgur.com/3u7b0Kq.png')
             .setTimestamp();
 
-        if (channel && channel.isTextBased()) {
-            channel.send({ embeds: [embed] });
+        if (boostChannel && boostChannel.isTextBased()) {
+            await boostChannel.send({ embeds: [publicEmbed] });
+        }
+
+        if (logChannel) {
+            const loggingEmbed = new EmbedBuilder()
+                .setTitle('Member Boosted Server')
+                .setDescription(`${newMember.displayName} (${newMember.user.tag}) has just boosted the server! 🚀`)
+                .setThumbnail(newMember.user.displayAvatarURL({ size: 1024 }))
+                .setColor('Gold')
+                .setTimestamp();
+
+            await logChannel.send({ embeds: [loggingEmbed] });
+        }
+    }
+    // --- BOOST STOP ---
+    if (oldMember.premiumSince && !newMember.premiumSince) {
+        try {
+            if (boostRole) {
+                await newMember.roles.remove(boostRole);
+            }
+        } catch (er) {
+            console.error('Could not remove role from member', er);
+        }
+
+        if (logChannel) {
+            const loggingEmbed = new EmbedBuilder()
+                .setTitle('Member Stopped Boosting')
+                .setDescription(`${newMember.displayName} (${newMember.user.tag}) has stopped boosting.`)
+                .setThumbnail(newMember.user.displayAvatarURL({ size: 1024 }))
+                .setColor('Red')
+                .setTimestamp();
+
+            await logChannel.send({ embeds: [loggingEmbed] });
         }
     }
 });
